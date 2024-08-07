@@ -4,7 +4,7 @@
 
 ## Description:
 
-A terminal based implementation of the japanese word game shiritori and the atlas word game.with flexible implementation allowing for similar games to be created.
+A terminal based implementation of the japanese word game shiritori and the atlas word game, with flexible implementation allowing for similar games to be created.
 
 ## Features:
 
