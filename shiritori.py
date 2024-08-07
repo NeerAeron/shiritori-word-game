@@ -64,7 +64,8 @@ class Shirotori:
         },
         'atlas': {
             'dictionary': ['dictionaries/uscities.txt', 'dictionaries/usstates.txt', 
-                           'dictionaries/countries.txt', 'dictionaries/worldcities.txt'],
+                           'dictionaries/countries.txt', 'dictionaries/worldcities.txt',
+                           'continents.txt'],
             'countdown_time': 30,
             'input_type': 2
         },
