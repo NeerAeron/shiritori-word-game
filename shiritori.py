@@ -41,6 +41,8 @@ class Player:
     The `get_score` and `check_word` are used to calculate the score for a given word and check if a word is valid, respectively.
 """
 
+# Test commit
+
 class Shirotori:
     _WINNING_SCORE = 100
     _MIN_WORD_LEN  = 3
