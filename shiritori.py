@@ -44,7 +44,7 @@ class Player:
 class Shirotori:
     _WINNING_SCORE = 100
     _MIN_WORD_LEN  = 3
-    _MAX_PLAYERS = 100
+    _MAX_PLAYERS = 10
 
     # level: (min_word_length, max_word_length, average_word_length, standard_deviation)
     _DIFFICULTIES = {
