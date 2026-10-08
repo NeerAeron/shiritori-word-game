@@ -176,21 +176,25 @@ first turn, the game shows the bonus challenge and counts down from 5.
 ## Computer difficulty
 
 The computer plays real words from the same dictionary, and takes time to
-think and type like a person does. Harder levels play longer words, type
-faster, and in challenge mode go for the bonus challenge more often.
+think and type like a person does. Like a person, it finds common starting
+letters such as S or C easier: it answers faster and plays longer words. On
+awkward letters like Y, X, or Q, it slows down and plays shorter words.
 
-The levels are tuned in simulations against two kinds of player. Beginner is
-an even match for an intermediate player. The rest are tuned against an
-experienced player who thinks of a word in about 2 seconds (5 in challenge
-mode), types quickly, and plays 5 to 11 letter words:
+Harder levels play longer words, think and type faster, and in challenge mode
+go for the bonus challenge more often. From medium up, the computer also plays
+tactically, preferring words that leave you an awkward letter (a little on
+medium, more on hard, and as much as it can on impossible).
 
-| Difficulty | Word length  | Player wins (classic / challenge)   |
-| ---------- | ------------ | ----------------------------------- |
-| beginner   | 3–6 letters  | intermediate: about 50% / 50%       |
-| easy       | 5–9          | experienced: about 90% / 85%        |
-| medium     | 7–11         | experienced: about 60% / 50%        |
-| hard       | 9–15         | experienced: about 30% / 20%        |
-| impossible | 10–16        | experienced: about 5% / 2%          |
+| Difficulty | Word length | Thinking time (classic / challenge) | Leaves awkward letters |
+| ---------- | ----------- | ----------------------------------- | ---------------------- |
+| beginner   | 3–6 letters | about 0.8s / 3.6s                   | no                     |
+| easy       | 5–9         | about 1.2s / 4.8s                   | no                     |
+| medium     | 7–11        | about 1.9s / 2.8s                   | a little               |
+| hard       | 9–15        | about 2.3s / 2.0s                   | more                   |
+| impossible | 10–16       | about 1.9s / 1.6s                   | the most               |
+
+Word lengths and thinking times shift with the starting letter as described
+above. Beginner is meant to be an even match for an intermediate player.
 
 ## Stats
 

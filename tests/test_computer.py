@@ -1,3 +1,4 @@
+import math
 import random
 from dataclasses import replace
 
@@ -6,7 +7,10 @@ import pytest
 from shiritori.challenges import ANY_WORD, Challenge, ChallengeGame
 from shiritori.computer import (
     DIFFICULTIES,
+    EASE_LENGTH,
+    EASE_THINKING,
     choose_word,
+    letter_ease,
     thinking_time,
     typing_delays,
 )
@@ -30,13 +34,49 @@ def make_game(letter, words=WORDS):
 @pytest.mark.parametrize("difficulty", DIFFICULTIES.values(), ids=DIFFICULTIES)
 def test_chooses_playable_words_of_the_right_length(difficulty):
     rng = random.Random(0)
-    max_length = difficulty.max_length or float("inf")
     for letter in "AEKSTZ":
         game = make_game(letter)
+        shift = EASE_LENGTH * letter_ease(WORDS, letter)
         for _ in range(20):
             word = choose_word(game, difficulty, rng)
             assert game.check_word(word) is None
-            assert difficulty.min_length <= len(word) <= max_length
+            assert difficulty.min_length + shift <= len(word) <= difficulty.max_length + shift
+
+
+def test_letter_ease_ranks_common_letters_above_awkward_ones():
+    assert letter_ease(WORDS, "S") > 1
+    assert letter_ease(WORDS, "y") < -2
+    assert letter_ease(WORDS, "S") > letter_ease(WORDS, "E") > letter_ease(WORDS, "Y")
+    assert letter_ease(WORDS, "X") == -2.5  # capped
+
+
+def test_common_letters_get_longer_words_and_quicker_thinking():
+    difficulty = DIFFICULTIES["medium"]
+
+    def average(letter, measure):
+        rng = random.Random(1)
+        game = make_game(letter)
+        return sum(measure(game, rng) for _ in range(150)) / 150
+
+    def length(game, rng):
+        return len(choose_word(game, difficulty, rng))
+
+    def thinking(game, rng):
+        return thinking_time(game, difficulty, "word", rng)
+
+    assert average("S", length) > average("Y", length) + 1
+    assert average("S", thinking) < average("Y", thinking) * 0.7
+
+
+def test_harder_computers_leave_awkward_letters():
+    def awkward_share(difficulty):
+        rng = random.Random(3)
+        game = make_game("S")
+        endings = [choose_word(game, difficulty, rng)[-1] for _ in range(200)]
+        return sum(letter_ease(WORDS, e) < -1 for e in endings) / len(endings)
+
+    shares = {name: awkward_share(d) for name, d in DIFFICULTIES.items()}
+    assert shares["impossible"] > shares["hard"] > shares["medium"] > shares["easy"]
 
 
 def test_harder_difficulties_play_longer_words():
@@ -95,7 +135,7 @@ def test_goes_for_the_bonus_as_often_as_its_difficulty_says():
     rng = random.Random(0)
 
     assert {choose_word(game, always, rng) for _ in range(20)} == {"axe"}
-    assert {choose_word(game, never, rng) for _ in range(50)} == {"apple", "axe", "avocado"}
+    assert {choose_word(game, never, rng) for _ in range(50)} >= {"apple", "avocado"}
 
 
 def test_plays_any_word_when_the_bonus_is_out_of_reach():
@@ -114,9 +154,12 @@ def test_thinks_longer_in_challenge_mode_and_longest_for_the_bonus():
         rng = random.Random(0)
         return sum(thinking_time(game, medium, word, rng) for _ in range(400)) / 400
 
-    assert average(classic, "apple") == pytest.approx(medium.thinking, rel=0.1)
-    assert average(challenge, "apple") == pytest.approx(medium.challenge_thinking, rel=0.1)
-    assert average(challenge, "axe") == pytest.approx(medium.challenge_thinking + 3, rel=0.1)
+    factor = math.exp(-EASE_THINKING * letter_ease(words, "A"))
+    assert average(classic, "apple") == pytest.approx(medium.thinking * factor, rel=0.1)
+    assert average(challenge, "apple") == pytest.approx(medium.challenge_thinking * factor, rel=0.1)
+    assert average(challenge, "axe") == pytest.approx(
+        (medium.challenge_thinking + 3) * factor, rel=0.1
+    )
 
 
 def test_thinking_time_varies_like_a_persons():
