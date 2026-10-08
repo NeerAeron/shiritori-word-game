@@ -10,7 +10,6 @@ from .words import WordList
 
 MIN_WORD_LENGTH = 3
 DEFAULT_TARGET_SCORE = 100
-DEFAULT_TURN_TIME = 10
 
 # Q, X, Y and Z are left out because they make for an awkward first word.
 STARTING_LETTERS = "ABCDEFGHIJKLMNOPRSTUVW"
@@ -27,16 +26,24 @@ class Move:
     player: Player
     word: str
     points: int
+    multiplier: float = 1.0  # The bonus multiplier applied to the points, if any
 
 
 class Game:
-    """A game in progress.
+    """A classic game in progress.
 
     Players take turns naming a word that starts with the last letter of the
     previous word. A word scores one point per letter, plus a time bonus equal
     to the seconds left on the turn clock; once the clock runs out the bonus
-    turns into a penalty. The first player to reach the target score wins.
+    turns into a penalty.
+
+    Once someone reaches the target score, the round is played out so everyone
+    has the same number of turns, and the highest score wins. If the lead is
+    tied at the end of the round, another round is played.
     """
+
+    mode = "classic"
+    default_turn_time = 10
 
     def __init__(
         self,
@@ -44,7 +51,7 @@ class Game:
         words: WordList,
         *,
         target_score: int = DEFAULT_TARGET_SCORE,
-        turn_time: int = DEFAULT_TURN_TIME,
+        turn_time: int | None = None,
         rng: random.Random | None = None,
     ) -> None:
         if len(players) < 2:
@@ -52,7 +59,7 @@ class Game:
         self.players = list(players)
         self.words = words
         self.target_score = target_score
-        self.turn_time = turn_time
+        self.turn_time = turn_time or self.default_turn_time
         self.used_words: set[str] = set()
         self.moves: list[Move] = []
         self._rng = rng or random.Random()
@@ -64,10 +71,23 @@ class Game:
         return self.players[self._turn % len(self.players)]
 
     @property
+    def round_complete(self) -> bool:
+        """Whether every player has had the same number of turns."""
+        return self._turn % len(self.players) == 0
+
+    @property
+    def final_round(self) -> bool:
+        """Whether someone has reached the target, so this round is the last unless it ends tied."""
+        return any(player.score >= self.target_score for player in self.players)
+
+    @property
     def winner(self) -> Player | None:
-        """The player who has reached the target score, if anyone has."""
-        leader = max(self.players, key=lambda player: player.score)
-        return leader if leader.score >= self.target_score else None
+        """The winner, once the game is over."""
+        if not (self.round_complete and self.final_round):
+            return None
+        best = max(player.score for player in self.players)
+        leaders = [player for player in self.players if player.score == best]
+        return leaders[0] if len(leaders) == 1 else None
 
     def check_word(self, word: str) -> str | None:
         """Return why *word* can't be played this turn, or None if it can."""
@@ -82,9 +102,19 @@ class Game:
             return "not in the dictionary"
         return None
 
+    def multiplier_for(self, word: str) -> float:
+        """Return the bonus multiplier *word* would earn. Classic games have no bonuses."""
+        return 1.0
+
     def score(self, word: str, seconds: float) -> int:
         """Return the points for playing *word* after *seconds* of thinking."""
-        return round(len(word) + self.turn_time - seconds)
+        return self._score(word, seconds)[0]
+
+    def _score(self, word: str, seconds: float) -> tuple[int, float]:
+        points = len(word) + self.turn_time - seconds
+        # A bonus multiplies a positive score, but never makes a penalty worse.
+        multiplier = self.multiplier_for(word) if points > 0 else 1.0
+        return round(points * multiplier), multiplier
 
     def play(self, word: str, seconds: float) -> int:
         """Play *word* for the current player and return the points it scored."""
@@ -92,9 +122,9 @@ class Game:
         if problem:
             raise ValueError(f"Can't play {word!r}: {problem}.")
         word = word.lower()
-        points = self.score(word, seconds)
+        points, multiplier = self._score(word, seconds)
         self.current_player.score += points
-        self.moves.append(Move(self.current_player, word, points))
+        self.moves.append(Move(self.current_player, word, points, multiplier))
         self.used_words.add(word)
         self.letter = word[-1].upper()
         self._turn += 1

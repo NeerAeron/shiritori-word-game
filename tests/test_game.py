@@ -94,14 +94,50 @@ def test_turns_rotate_through_every_player():
     assert order == ["Ann", "Bob", "Cat", "Ann"]
 
 
-def test_winner_is_the_first_to_reach_the_target():
+def test_the_round_is_played_out_before_anyone_wins():
     game = make_game(target_score=30)
     game.play("apple", seconds=0)  # Ann: 15
-    assert game.winner is None
     game.play("egg", seconds=0)  # Bob: 13
+    assert not game.final_round
+    game.play("giraffe", seconds=0)  # Ann: 32, but Bob hasn't had his second turn
+    assert game.final_round
+    assert not game.round_complete
     assert game.winner is None
-    game.play("giraffe", seconds=0)  # Ann: 32
+    game.play("elephant", seconds=0)  # Bob: 31
+    assert game.round_complete
     assert game.winner is game.players[0]
+
+
+def test_the_last_player_can_still_win_the_round():
+    game = make_game(target_score=30)
+    game.players[1].score = 5
+    for word in ("apple", "egg", "giraffe", "elephant"):  # Ann: 32, Bob: 5 + 13 + 18 = 36
+        game.play(word, seconds=0)
+    assert game.winner is game.players[1]
+
+
+def test_a_tie_for_the_lead_plays_another_round():
+    game = make_game(target_score=30)
+    game.players[1].score = 1
+    for word in ("apple", "egg", "giraffe", "elephant"):  # Ann: 32, Bob: 1 + 13 + 18 = 32
+        game.play(word, seconds=0)
+    assert game.round_complete
+    assert game.final_round
+    assert game.winner is None
+    game.play("tiger", seconds=0)  # Ann: 47
+    assert game.winner is None
+    game.play("rabbit", seconds=0)  # Bob: 48
+    assert game.winner is game.players[1]
+
+
+def test_everyone_gets_the_same_number_of_turns():
+    game = make_game("Ann", "Bob", "Cat", target_score=10)
+    game.play("apple", seconds=0)  # Ann already has enough to win
+    assert game.winner is None
+    game.play("egg", seconds=0)
+    assert game.winner is None
+    game.play("giraffe", seconds=0)  # Cat: 17
+    assert game.winner is game.players[2]
 
 
 def test_skip_passes_the_turn_with_a_new_letter():
@@ -110,3 +146,12 @@ def test_skip_passes_the_turn_with_a_new_letter():
     assert game.current_player is game.players[1]
     assert game.letter in STARTING_LETTERS
     assert game.players[0].score == 0
+
+
+def test_classic_games_have_a_ten_second_clock_and_no_bonuses():
+    game = make_game()
+    assert game.mode == "classic"
+    assert game.turn_time == 10
+    assert game.multiplier_for("apple") == 1.0
+    game.play("apple", seconds=0)
+    assert game.moves[-1].multiplier == 1.0
