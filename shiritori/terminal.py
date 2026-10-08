@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import math
+import os
 import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
+from types import ModuleType
 from typing import TextIO
 
-import readchar
+if sys.platform != "win32":
+    import select
+    import termios
 
 BANNER = r"""
  _______ __     __        __ __               __
@@ -20,10 +24,94 @@ BANNER = r"""
   The word-chain game, by Neer
 """
 
-# readchar reports Enter as "\n" on POSIX and "\r" on Windows, and Backspace as
-# "\x7f" or "\x08" depending on the platform and terminal; accept them all.
-ENTER_KEYS = frozenset({"\r", "\n", readchar.key.ENTER})
-BACKSPACE_KEYS = frozenset({"\x7f", "\x08", readchar.key.BACKSPACE})
+# Enter arrives as "\n" or "\r", and Backspace as "\x7f" or "\x08", depending on
+# the platform and terminal; accept them all.
+ENTER_KEYS = frozenset({"\r", "\n"})
+BACKSPACE_KEYS = frozenset({"\x7f", "\x08"})
+
+
+class PosixKeyboard:
+    """Reads keypresses one at a time on Linux and macOS.
+
+    Inside a ``with`` block the terminal stops echoing keys and stops waiting
+    for Enter, so each key can be handled the moment it's pressed. Ctrl+C still
+    raises KeyboardInterrupt.
+    """
+
+    def __init__(self, fd: int | None = None) -> None:
+        self._fd = sys.stdin.fileno() if fd is None else fd
+        self._saved: list | None = None
+
+    def __enter__(self) -> PosixKeyboard:
+        self._saved = termios.tcgetattr(self._fd)
+        mode = termios.tcgetattr(self._fd)
+        mode[3] &= ~(termios.ICANON | termios.ECHO)
+        mode[6][termios.VMIN] = 1
+        mode[6][termios.VTIME] = 0
+        termios.tcsetattr(self._fd, termios.TCSAFLUSH, mode)
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        if self._saved is not None:
+            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._saved)
+
+    def discard_pending(self) -> None:
+        """Throw away keys pressed before now, such as during the computer's turn."""
+        termios.tcflush(self._fd, termios.TCIFLUSH)
+
+    def read_key(self) -> str:
+        """Wait for a keypress and return it.
+
+        Arrow and function keys send an escape sequence, which is returned whole
+        so that the letters in it aren't mistaken for typing.
+        """
+        key = self._read_char()
+        if key == "\x1b" and select.select([self._fd], [], [], 0.05)[0]:
+            key += self._read_char()
+            if key[-1] in "[O":
+                while True:
+                    key += self._read_char()
+                    if "@" <= key[-1] <= "~" and key != "\x1b[[":
+                        break
+        return key
+
+    def _read_char(self) -> str:
+        byte = os.read(self._fd, 1)
+        if not byte:
+            raise EOFError
+        return byte.decode("latin-1")
+
+
+class WindowsKeyboard:
+    """Reads keypresses one at a time on Windows, where keys are never echoed."""
+
+    def __init__(self, console: ModuleType | None = None) -> None:
+        if console is None:
+            import msvcrt as console
+        self._console = console
+
+    def __enter__(self) -> WindowsKeyboard:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        pass
+
+    def discard_pending(self) -> None:
+        """Throw away keys pressed before now, such as during the computer's turn."""
+        while self._console.kbhit():
+            self._console.getwch()
+
+    def read_key(self) -> str:
+        """Wait for a keypress and return it."""
+        key = self._console.getwch()
+        if key == "\x03":
+            raise KeyboardInterrupt
+        if key in ("\x00", "\xe0"):
+            key += self._console.getwch()  # Arrow and function keys send a second code.
+        return key
+
+
+Keyboard = WindowsKeyboard if sys.platform == "win32" else PosixKeyboard
 
 
 class TurnPrompt:
@@ -77,9 +165,7 @@ class TurnPrompt:
         return math.ceil(self.seconds - self.elapsed())
 
     def read_word(
-        self,
-        check: Callable[[str], str | None],
-        read_key: Callable[[], str] = readchar.readkey,
+        self, check: Callable[[str], str | None], read_key: Callable[[], str]
     ) -> tuple[str, float]:
         """Let the player type a word, and return it with the seconds taken.
 

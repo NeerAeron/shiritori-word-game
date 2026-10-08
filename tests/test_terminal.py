@@ -1,8 +1,11 @@
 import io
+import os
+import sys
+import time
 
 import pytest
 
-from shiritori.terminal import TurnPrompt
+from shiritori.terminal import PosixKeyboard, TurnPrompt, WindowsKeyboard
 
 
 class FakeClock:
@@ -118,3 +121,100 @@ def test_type_word_types_one_letter_at_a_time(clock, out):
     assert seconds == 2.0
     assert ": c" in out.getvalue()
     assert ": ca" in out.getvalue()
+
+
+class FakeConsole:
+    """Stands in for Windows' msvcrt module."""
+
+    def __init__(self, *keys):
+        self.keys = list(keys)
+
+    def getwch(self):
+        return self.keys.pop(0)
+
+    def kbhit(self):
+        return bool(self.keys)
+
+
+def test_windows_keyboard_reads_keys():
+    keyboard = WindowsKeyboard(FakeConsole("c", "\r", "\x08"))
+    with keyboard:
+        assert [keyboard.read_key() for _ in range(3)] == ["c", "\r", "\x08"]
+
+
+def test_windows_keyboard_reads_arrow_keys_whole():
+    keyboard = WindowsKeyboard(FakeConsole("\xe0", "H", "\x00", ";", "a"))
+    assert keyboard.read_key() == "\xe0H"
+    assert keyboard.read_key() == "\x00;"
+    assert keyboard.read_key() == "a"
+
+
+def test_windows_keyboard_ctrl_c_quits():
+    with pytest.raises(KeyboardInterrupt):
+        WindowsKeyboard(FakeConsole("\x03")).read_key()
+
+
+def test_windows_keyboard_discards_early_keys():
+    console = FakeConsole("x", "y")
+    WindowsKeyboard(console).discard_pending()
+    assert console.keys == []
+
+
+posix_only = pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX terminal")
+
+
+@pytest.fixture
+def terminal():
+    """A pseudo-terminal: write keys to the first file descriptor, read them from the second."""
+    import pty
+
+    controller, device = pty.openpty()
+    yield controller, device
+    os.close(controller)
+    os.close(device)
+
+
+@posix_only
+def test_posix_keyboard_reads_one_key_at_a_time(terminal):
+    controller, device = terminal
+    with PosixKeyboard(device) as keyboard:
+        os.write(controller, b"cat\r\x7f")
+        assert [keyboard.read_key() for _ in range(5)] == ["c", "a", "t", "\n", "\x7f"]
+
+
+@posix_only
+def test_posix_keyboard_reads_escape_sequences_whole(terminal):
+    controller, device = terminal
+    with PosixKeyboard(device) as keyboard:
+        os.write(controller, b"\x1b[A")
+        assert keyboard.read_key() == "\x1b[A"
+        os.write(controller, b"\x1b[1;5C")
+        assert keyboard.read_key() == "\x1b[1;5C"
+        os.write(controller, b"\x1bOP")
+        assert keyboard.read_key() == "\x1bOP"
+        os.write(controller, b"\x1b")
+        assert keyboard.read_key() == "\x1b"
+
+
+@posix_only
+def test_posix_keyboard_does_not_echo_and_restores_the_terminal(terminal):
+    import termios
+
+    controller, device = terminal
+    before = termios.tcgetattr(device)
+    with PosixKeyboard(device) as keyboard:
+        assert not termios.tcgetattr(device)[3] & termios.ECHO
+        os.write(controller, b"z")
+        assert keyboard.read_key() == "z"
+    assert termios.tcgetattr(device) == before
+
+
+@posix_only
+def test_posix_keyboard_discards_early_keys(terminal):
+    controller, device = terminal
+    with PosixKeyboard(device) as keyboard:
+        os.write(controller, b"early")
+        time.sleep(0.05)
+        keyboard.discard_pending()
+        os.write(controller, b"n")
+        assert keyboard.read_key() == "n"

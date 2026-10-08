@@ -10,7 +10,6 @@ from .words import WordList
 
 MIN_WORD_LENGTH = 3
 DEFAULT_TARGET_SCORE = 100
-DEFAULT_TURN_TIME = 10
 
 # Q, X, Y and Z are left out because they make for an awkward first word.
 STARTING_LETTERS = "ABCDEFGHIJKLMNOPRSTUVW"
@@ -27,10 +26,11 @@ class Move:
     player: Player
     word: str
     points: int
+    multiplier: float = 1.0  # The bonus multiplier applied to the points, if any
 
 
 class Game:
-    """A game in progress.
+    """A classic game in progress.
 
     Players take turns naming a word that starts with the last letter of the
     previous word. A word scores one point per letter, plus a time bonus equal
@@ -38,13 +38,16 @@ class Game:
     turns into a penalty. The first player to reach the target score wins.
     """
 
+    mode = "classic"
+    default_turn_time = 10
+
     def __init__(
         self,
         players: Sequence[Player],
         words: WordList,
         *,
         target_score: int = DEFAULT_TARGET_SCORE,
-        turn_time: int = DEFAULT_TURN_TIME,
+        turn_time: int | None = None,
         rng: random.Random | None = None,
     ) -> None:
         if len(players) < 2:
@@ -52,7 +55,7 @@ class Game:
         self.players = list(players)
         self.words = words
         self.target_score = target_score
-        self.turn_time = turn_time
+        self.turn_time = turn_time or self.default_turn_time
         self.used_words: set[str] = set()
         self.moves: list[Move] = []
         self._rng = rng or random.Random()
@@ -82,9 +85,19 @@ class Game:
             return "not in the dictionary"
         return None
 
+    def multiplier_for(self, word: str) -> float:
+        """Return the bonus multiplier *word* would earn. Classic games have no bonuses."""
+        return 1.0
+
     def score(self, word: str, seconds: float) -> int:
         """Return the points for playing *word* after *seconds* of thinking."""
-        return round(len(word) + self.turn_time - seconds)
+        return self._score(word, seconds)[0]
+
+    def _score(self, word: str, seconds: float) -> tuple[int, float]:
+        points = len(word) + self.turn_time - seconds
+        # A bonus multiplies a positive score, but never makes a penalty worse.
+        multiplier = self.multiplier_for(word) if points > 0 else 1.0
+        return round(points * multiplier), multiplier
 
     def play(self, word: str, seconds: float) -> int:
         """Play *word* for the current player and return the points it scored."""
@@ -92,9 +105,9 @@ class Game:
         if problem:
             raise ValueError(f"Can't play {word!r}: {problem}.")
         word = word.lower()
-        points = self.score(word, seconds)
+        points, multiplier = self._score(word, seconds)
         self.current_player.score += points
-        self.moves.append(Move(self.current_player, word, points))
+        self.moves.append(Move(self.current_player, word, points, multiplier))
         self.used_words.add(word)
         self.letter = word[-1].upper()
         self._turn += 1

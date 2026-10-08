@@ -110,3 +110,12 @@ def test_skip_passes_the_turn_with_a_new_letter():
     assert game.current_player is game.players[1]
     assert game.letter in STARTING_LETTERS
     assert game.players[0].score == 0
+
+
+def test_classic_games_have_a_ten_second_clock_and_no_bonuses():
+    game = make_game()
+    assert game.mode == "classic"
+    assert game.turn_time == 10
+    assert game.multiplier_for("apple") == 1.0
+    game.play("apple", seconds=0)
+    assert game.moves[-1].multiplier == 1.0
