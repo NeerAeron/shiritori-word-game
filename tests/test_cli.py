@@ -5,7 +5,7 @@ import pytest
 from shiritori import __version__, cli
 from shiritori.challenges import Challenge, ChallengeGame
 from shiritori.computer import DIFFICULTIES, ComputerPlayer
-from shiritori.game import Game, Player
+from shiritori.game import Game, Move, Player
 from shiritori.stats import HighScore, Record, Stats
 from shiritori.words import WordList
 
@@ -180,7 +180,7 @@ def test_play_with_people_at_the_keyboard(capsys):
     assert keyboard.discarded == 4  # before each person's turn
     output = capsys.readouterr().out
     assert "xyz  (must start with A)" in output
-    assert "Ann (A): apple  +15" in output
+    assert "Ann (A): apple  +15  (5 + 10s)" in output
     assert "Bob (E): egg  +13" in output
     assert "Ann (G): giraffe  +17" in output
     assert "Ann reached 30! Last round." in output
@@ -218,10 +218,10 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     assert "Starting in 1..." in output
     assert "  Challenge: end with E   (bonus x2: include G)" in output
     assert "ant  (doesn't meet the challenge)" in output
-    assert "Ann (A): apple  +25\n" in output  # 5 letters + 20 seconds
-    assert "Bob (E): eagle  +50  (x2 bonus)" in output
-    assert "Ann (E): edge  +48  (x2 bonus)" in output
-    assert "Bob (E): else  +24\n" in output
+    assert "Ann (A): apple  +25  (5 + 20s)\n" in output
+    assert "Bob (E): eagle  +50  (5 + 20s, x2 bonus)" in output
+    assert "Ann (E): edge  +48  (4 + 20s, x2 bonus)" in output
+    assert "Bob (E): else  +24  (4 + 20s)\n" in output
 
 
 def test_main_needs_a_terminal(monkeypatch, capsys):
@@ -410,3 +410,15 @@ def test_challenge_mode_shows_the_bonus_then_counts_down(capsys):
         f"  Starting in {n}..." for n in (5, 4, 3, 2, 1)
     ]
     assert pauses == [1] * 5
+
+
+@pytest.mark.parametrize(
+    ("move", "text"),
+    [
+        (Move(Player("Neer"), "restitution", 17, time_bonus=6), "(11 + 6s)"),
+        (Move(Player("Neer"), "tiger", 2, time_bonus=-3), "(5 - 3s)"),
+        (Move(Player("Neer"), "dusty", 51, 2.3, time_bonus=17), "(5 + 17s, x2.3 bonus)"),
+    ],
+)
+def test_breakdown_shows_how_the_points_add_up(move, text):
+    assert cli.breakdown(move) == text

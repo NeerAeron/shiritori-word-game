@@ -59,7 +59,7 @@ def test_play_scores_the_word_and_passes_the_turn():
     assert points == 5 + 10 - 2
     assert game.players[0].score == points
     assert game.used_words == {"apple"}
-    assert game.moves == [Move(game.players[0], "apple", points)]
+    assert game.moves == [Move(game.players[0], "apple", points, time_bonus=8)]
     assert game.letter == "E"
     assert game.current_player is game.players[1]
 
@@ -155,3 +155,13 @@ def test_classic_games_have_a_ten_second_clock_and_no_bonuses():
     assert game.multiplier_for("apple") == 1.0
     game.play("apple", seconds=0)
     assert game.moves[-1].multiplier == 1.0
+
+
+def test_moves_record_the_time_bonus_and_penalty():
+    game = make_game()
+    game.play("apple", seconds=3.4)  # 5 letters + 7 seconds left (rounded)
+    assert game.moves[-1].points == 12
+    assert game.moves[-1].time_bonus == 7
+    game.play("egg", seconds=14)  # 3 letters, 4 seconds over
+    assert game.moves[-1].points == -1
+    assert game.moves[-1].time_bonus == -4

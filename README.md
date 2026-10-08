@@ -8,11 +8,11 @@ terminal. You race a countdown clock against a computer opponent or against
 friends on the same keyboard.
 
 ```text
-Neer (T): tiger  +13
+Neer (T): tiger  +13  (5 + 8s)
     Neer: 13 | Computer: 0
-Computer (R): rhubarb  +16
+Computer (R): rhubarb  +16  (7 + 9s)
     Neer: 13 | Computer: 16
-Neer (B): banana  +14
+Neer (B): banana  +14  (6 + 8s)
     Neer: 27 | Computer: 16
   8 | Computer (A): avala
 ```
@@ -107,6 +107,11 @@ becomes a penalty, so a slow answer can lose you points.
 
 For example, playing `elephant` (8 letters) with 6 seconds left scores
 8 + 6 = 14 points. Playing it 3 seconds after time runs out scores 8 − 3 = 5.
+After each word, the game shows how its points add up:
+
+```text
+Neer (E): elephant  +14  (8 + 6s)
+```
 
 ### Winning
 
@@ -153,10 +158,10 @@ challenge *and* the bonus challenge has its points multiplied:
 
 ```text
   Challenge: include Y   (bonus x2.3: U is the only vowel)
-Neer (D): dusty  +51  (x2.3 bonus)
+Neer (D): dusty  +51  (5 + 17s, x2.3 bonus)
     Neer: 51 | Computer: 0
   Challenge: no letter N   (bonus x2.3: U is the only vowel)
-Computer (Y): yogurt  +19
+Computer (Y): yogurt  +19  (6 + 13s)
     Neer: 51 | Computer: 19
 ```
 
