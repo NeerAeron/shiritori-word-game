@@ -26,6 +26,7 @@ class Move:
     word: str
     points: int
     multiplier: float = 1.0  # The bonus multiplier applied to the points, if any
+    time_bonus: int = 0  # Seconds left on the clock (negative once it ran out)
 
 
 class Game:
@@ -110,11 +111,12 @@ class Game:
         """Return the points for playing *word* after *seconds* of thinking."""
         return self._score(word, seconds)[0]
 
-    def _score(self, word: str, seconds: float) -> tuple[int, float]:
-        points = len(word) + self.turn_time - seconds
+    def _score(self, word: str, seconds: float) -> tuple[int, float, int]:
+        """Return the points, the bonus multiplier applied, and the time bonus."""
+        points = round(len(word) + self.turn_time - seconds)
         # A bonus multiplies a positive score, but never makes a penalty worse.
         multiplier = self.multiplier_for(word) if points > 0 else 1.0
-        return round(points * multiplier), multiplier
+        return round(points * multiplier), multiplier, points - len(word)
 
     def play(self, word: str, seconds: float) -> int:
         """Play *word* for the current player and return the points it scored."""
@@ -122,9 +124,9 @@ class Game:
         if problem:
             raise ValueError(f"Can't play {word!r}: {problem}.")
         word = word.lower()
-        points, multiplier = self._score(word, seconds)
+        points, multiplier, time_bonus = self._score(word, seconds)
         self.current_player.score += points
-        self.moves.append(Move(self.current_player, word, points, multiplier))
+        self.moves.append(Move(self.current_player, word, points, multiplier, time_bonus))
         self.used_words.add(word)
         self.letter = word[-1].upper()
         self._turn += 1

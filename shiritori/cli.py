@@ -21,7 +21,7 @@ from .computer import (
     thinking_time,
     typing_delays,
 )
-from .game import MIN_WORD_LENGTH, Game, Player
+from .game import MIN_WORD_LENGTH, Game, Move, Player
 from .stats import Stats, StatsError, counts_toward_stats, format_stats, stats_file
 from .terminal import BANNER, Keyboard, TurnPrompt
 from .words import WordList
@@ -188,6 +188,15 @@ def scoreboard(players: Sequence[Player]) -> str:
     return " | ".join(f"{player.name}: {player.score}" for player in players)
 
 
+def breakdown(move: Move) -> str:
+    """How a word's points add up: letters plus seconds left, such as "(11 + 6s, x2 bonus)"."""
+    sign = "+" if move.time_bonus >= 0 else "-"
+    parts = f"{len(move.word)} {sign} {abs(move.time_bonus)}s"
+    if move.multiplier > 1:
+        parts += f", x{move.multiplier:g} bonus"
+    return f"({parts})"
+
+
 def show_bonus(game: ChallengeGame, sleep: Callable[[float], None], seconds: int = 5) -> None:
     """Announce the game's bonus challenge, and give players a moment to read it."""
     print(f"\n  BONUS x{game.multiplier:g}: {game.bonus.text}\n")
@@ -237,8 +246,7 @@ def play(
                     word, seconds = prompt.read_word(game.check_word, keyboard.read_key)
 
             points = game.play(word, seconds)
-            bonus = game.moves[-1].multiplier
-            print(f"{label}: {word}  {points:+d}" + (f"  (x{bonus:g} bonus)" if bonus > 1 else ""))
+            print(f"{label}: {word}  {points:+d}  {breakdown(game.moves[-1])}")
             print(f"    {scoreboard(game.players)}")
 
             if game.final_round and game.winner is None:
