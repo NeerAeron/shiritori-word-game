@@ -160,8 +160,9 @@ TURN_CHALLENGES = (*EASY, *MEDIUM, *HARD)
 
 # Each difficulty draws turn challenges from a bell curve over the scale above,
 # from 0 (easiest) to 1 (hardest). The curves are Beta distributions, given as
-# (alpha, beta); their peaks sit at about 0.06, 0.23, 0.40 and 0.50.
+# (alpha, beta); their peaks sit at about 0.02, 0.06, 0.23, 0.40 and 0.50.
 CHALLENGE_CURVES = {
+    "beginner": (1.1, 5.0),  # Almost always easy
     "easy": (1.2, 4.0),  # Heavily toward the easy end
     "medium": (1.6, 3.0),  # Toward the easy end
     "hard": (2.0, 2.5),  # Slightly toward the easy end

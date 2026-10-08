@@ -99,7 +99,7 @@ def test_ask_game_type(answers, answer, game_type):
 
 
 def test_one_player_faces_the_computer(answers):
-    answers("1", "Neer", "3")
+    answers("1", "Neer", "4")
     players = cli.ask_players()
 
     assert [player.name for player in players] == ["Neer", "Computer"]
@@ -121,7 +121,7 @@ def test_blank_answers_use_the_defaults(answers):
     players = cli.ask_players()
 
     assert [player.name for player in players] == ["Player 1", "Computer"]
-    assert players[1].difficulty is DIFFICULTIES["easy"]
+    assert players[1].difficulty is DIFFICULTIES["beginner"]
 
 
 def test_reprompts_after_invalid_answers(answers, capsys):
@@ -138,7 +138,8 @@ def test_reprompts_after_invalid_answers(answers, capsys):
 
 
 @pytest.mark.parametrize(
-    ("answer", "expected"), [("2", "medium"), ("Impossible", "impossible"), ("", "easy")]
+    ("answer", "expected"),
+    [("1", "beginner"), ("3", "medium"), ("Impossible", "impossible"), ("", "beginner")],
 )
 def test_ask_difficulty_by_number_or_name(answers, answer, expected):
     answers(answer)
@@ -146,9 +147,9 @@ def test_ask_difficulty_by_number_or_name(answers, answer, expected):
 
 
 def test_ask_difficulty_reprompts(answers, capsys):
-    answers("5", "expert", "hard")
+    answers("6", "expert", "hard")
     assert cli.ask_difficulty() is DIFFICULTIES["hard"]
-    assert capsys.readouterr().out.count("Choose 1-4 or type one of the names.") == 2
+    assert capsys.readouterr().out.count("Choose 1-5 or type one of the names.") == 2
 
 
 @pytest.mark.parametrize("game_type", [Game, ChallengeGame])
