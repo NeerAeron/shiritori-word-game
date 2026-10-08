@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from .words import WordList
 
 MIN_WORD_LENGTH = 3
+DEFAULT_TARGET_SCORE = 100
+DEFAULT_TURN_TIME = 10
 
 # Q, X, Y and Z are left out because they make for an awkward first word.
 STARTING_LETTERS = "ABCDEFGHIJKLMNOPRSTUVW"
@@ -18,6 +20,13 @@ STARTING_LETTERS = "ABCDEFGHIJKLMNOPRSTUVW"
 class Player:
     name: str
     score: int = 0
+
+
+@dataclass(frozen=True)
+class Move:
+    player: Player
+    word: str
+    points: int
 
 
 class Game:
@@ -34,8 +43,8 @@ class Game:
         players: Sequence[Player],
         words: WordList,
         *,
-        target_score: int = 100,
-        turn_time: int = 10,
+        target_score: int = DEFAULT_TARGET_SCORE,
+        turn_time: int = DEFAULT_TURN_TIME,
         rng: random.Random | None = None,
     ) -> None:
         if len(players) < 2:
@@ -45,6 +54,7 @@ class Game:
         self.target_score = target_score
         self.turn_time = turn_time
         self.used_words: set[str] = set()
+        self.moves: list[Move] = []
         self._rng = rng or random.Random()
         self._turn = 0
         self.letter = self._rng.choice(STARTING_LETTERS)
@@ -84,6 +94,7 @@ class Game:
         word = word.lower()
         points = self.score(word, seconds)
         self.current_player.score += points
+        self.moves.append(Move(self.current_player, word, points))
         self.used_words.add(word)
         self.letter = word[-1].upper()
         self._turn += 1

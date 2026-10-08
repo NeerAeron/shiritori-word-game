@@ -7,11 +7,14 @@ import random
 import sys
 import textwrap
 from collections.abc import Callable, Sequence
+from datetime import date
+from pathlib import Path
 from typing import TypeVar
 
 from . import __version__
 from .computer import DIFFICULTIES, ComputerPlayer, Difficulty, choose_word, typing_delays
-from .game import MIN_WORD_LENGTH, Game, Player
+from .game import DEFAULT_TARGET_SCORE, DEFAULT_TURN_TIME, MIN_WORD_LENGTH, Game, Player
+from .stats import Stats, StatsError, counts_toward_stats, default_path, format_stats
 from .terminal import BANNER, TurnPrompt
 from .words import WordList
 
@@ -28,6 +31,10 @@ how to play:
   Each word scores one point per letter plus a time bonus: the seconds left
   on the turn clock. Once the clock runs out, the bonus becomes a penalty.
   The first player to reach the target score wins.
+
+  Your record against each difficulty and your highest-scoring words are
+  saved between games. Games with a custom --target-score or --turn-time
+  don't count toward them.
 
   Play alone against the computer, or with up to {MAX_PLAYERS} people sharing one
   keyboard. Press Ctrl+C at any time to quit.
@@ -46,16 +53,23 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--target-score",
         type=_positive_int,
-        default=100,
+        default=DEFAULT_TARGET_SCORE,
         metavar="POINTS",
         help="points needed to win (default: %(default)s)",
     )
     parser.add_argument(
         "--turn-time",
         type=_positive_int,
-        default=10,
+        default=DEFAULT_TURN_TIME,
         metavar="SECONDS",
         help="seconds on the clock each turn (default: %(default)s)",
+    )
+    stats = parser.add_mutually_exclusive_group()
+    stats.add_argument(
+        "--stats", action="store_true", help="show your record and high scores, then exit"
+    )
+    stats.add_argument(
+        "--reset-stats", action="store_true", help="erase your record and high scores"
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser.parse_args(argv)
@@ -165,8 +179,71 @@ def play(game: Game, rng: random.Random | None = None) -> Player:
     return winner
 
 
+def record_stats(game: Game, path: Path) -> None:
+    """Add a finished game to the saved stats, and announce anything new."""
+    if not counts_toward_stats(game):
+        print("Games with custom rules don't count toward your stats.")
+        return
+    try:
+        stats = Stats.load(path)
+        ranks = stats.record_game(game, date.today())
+        stats.save(path)
+    except StatsError as error:
+        print(f"Your stats weren't updated. {error}")
+        return
+
+    if ranks:
+        best = stats.high_scores[ranks[0] - 1]
+        print(f"New high score #{ranks[0]}: {best.player} scored {best.points} with {best.word!r}!")
+    for player in game.players:
+        if isinstance(player, ComputerPlayer):
+            record = stats.vs_computer[player.difficulty.name]
+            print(
+                f"Your record against {player.difficulty.name}: "
+                f"{record.won} won, {record.lost} lost."
+            )
+    print("See all your stats with: shiritori --stats")
+
+
+def show_stats(path: Path) -> int:
+    try:
+        stats = Stats.load(path)
+    except StatsError as error:
+        print(error, file=sys.stderr)
+        return 1
+    print(format_stats(stats))
+    print(f"\nStats file: {path}")
+    return 0
+
+
+def reset_stats(path: Path) -> int:
+    if not path.exists():
+        print("There are no stats to erase.")
+        return 0
+    try:
+        answer = input(f"Erase all stats in {path}? [y/N]: ")
+    except (KeyboardInterrupt, EOFError):
+        answer = ""
+        print()
+    if answer.strip().lower() not in ("y", "yes"):
+        print("Your stats were left alone.")
+        return 0
+    try:
+        path.unlink()
+    except OSError as error:
+        print(f"Couldn't erase {path}: {error}", file=sys.stderr)
+        return 1
+    print("Stats erased.")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    stats_path = default_path()
+    if args.stats:
+        return show_stats(stats_path)
+    if args.reset_stats:
+        return reset_stats(stats_path)
     if not sys.stdin.isatty():
         print("shiritori needs an interactive terminal to play in.", file=sys.stderr)
         return 1
@@ -186,4 +263,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 130
 
     print(f"\n{winner.name} wins with {winner.score} points!")
+    record_stats(game, stats_path)
     return 0

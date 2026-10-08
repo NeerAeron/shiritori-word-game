@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from shiritori.game import STARTING_LETTERS, Game, Player
+from shiritori.game import STARTING_LETTERS, Game, Move, Player
 from shiritori.words import WordList
 
 WORDS = WordList(["apple", "egg", "eagle", "giraffe", "elephant", "tiger", "rabbit"])
@@ -59,6 +59,7 @@ def test_play_scores_the_word_and_passes_the_turn():
     assert points == 5 + 10 - 2
     assert game.players[0].score == points
     assert game.used_words == {"apple"}
+    assert game.moves == [Move(game.players[0], "apple", points)]
     assert game.letter == "E"
     assert game.current_player is game.players[1]
 

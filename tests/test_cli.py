@@ -5,6 +5,7 @@ import pytest
 from shiritori import __version__, cli
 from shiritori.computer import DIFFICULTIES, ComputerPlayer
 from shiritori.game import Game, Player
+from shiritori.stats import HighScore, Record, Stats
 from shiritori.terminal import TurnPrompt
 from shiritori.words import WordList
 
@@ -167,3 +168,92 @@ def test_main_plays_a_whole_game(monkeypatch, capsys):
 
     assert cli.main([]) == 0
     assert "Ann wins with 104 points!" in capsys.readouterr().out
+
+
+def test_main_saves_stats_after_a_game(monkeypatch, stats_file):
+    winner = Player("Ann", score=104)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr(cli, "ask_players", lambda: [winner, Player("Bob")])
+    monkeypatch.setattr(cli, "play", lambda game: winner)
+
+    cli.main([])
+    assert Stats.load(stats_file).multiplayer_games == 1
+
+
+def finished_game_vs_computer(**rules):
+    """A finished game in which Neer played apple (15) and giraffe (17) and beat the computer."""
+    neer = Player("Neer")
+    computer = ComputerPlayer("Computer", difficulty=DIFFICULTIES["hard"])
+    game = Game([neer, computer], WordList(["apple", "egg", "giraffe"]), **rules)
+    game.letter = "A"
+    for word in ["apple", "egg", "giraffe"]:
+        game.play(word, seconds=0)
+    neer.score = 104  # skip ahead to Neer winning
+    return game
+
+
+def test_record_stats_saves_the_game_and_announces_news(stats_file, capsys):
+    cli.record_stats(finished_game_vs_computer(), stats_file)
+
+    stats = Stats.load(stats_file)
+    assert stats.vs_computer["hard"] == Record(played=1, won=1)
+    assert [entry.word for entry in stats.high_scores] == ["giraffe", "apple"]
+    output = capsys.readouterr().out
+    assert "New high score #1: Neer scored 17 with 'giraffe'!" in output
+    assert "Your record against hard: 1 won, 0 lost." in output
+    assert "shiritori --stats" in output
+
+
+def test_record_stats_skips_games_with_custom_rules(stats_file, capsys):
+    cli.record_stats(finished_game_vs_computer(target_score=50), stats_file)
+
+    assert not stats_file.exists()
+    assert "custom rules don't count" in capsys.readouterr().out
+
+
+def test_record_stats_survives_a_broken_stats_file(stats_file, capsys):
+    stats_file.write_text("not json")
+    cli.record_stats(finished_game_vs_computer(), stats_file)
+
+    assert stats_file.read_text() == "not json"
+    assert "Your stats weren't updated." in capsys.readouterr().out
+
+
+def test_stats_flag_prints_the_report(stats_file, capsys):
+    Stats(
+        vs_computer={"easy": Record(played=4, won=3)},
+        high_scores=[HighScore(21, "quadrilateral", "Neer", "easy", "2026-10-08")],
+    ).save(stats_file)
+
+    assert cli.main(["--stats"]) == 0
+    output = capsys.readouterr().out
+    assert "75%" in output
+    assert "quadrilateral" in output
+    assert str(stats_file) in output
+
+
+def test_stats_flag_reports_a_broken_file(stats_file, capsys):
+    stats_file.write_text("not json")
+    assert cli.main(["--stats"]) == 1
+    assert "Couldn't read" in capsys.readouterr().err
+
+
+def test_stats_flags_cant_be_combined(capsys):
+    with pytest.raises(SystemExit):
+        cli.parse_args(["--stats", "--reset-stats"])
+
+
+@pytest.mark.parametrize(
+    ("answer", "erased"), [("y", True), ("YES", True), ("", False), ("n", False)]
+)
+def test_reset_stats_asks_first(answers, stats_file, answer, erased):
+    Stats(multiplayer_games=3).save(stats_file)
+    answers(answer)
+
+    assert cli.main(["--reset-stats"]) == 0
+    assert stats_file.exists() is not erased
+
+
+def test_reset_stats_with_nothing_to_erase(stats_file, capsys):
+    assert cli.main(["--reset-stats"]) == 0
+    assert "no stats to erase" in capsys.readouterr().out

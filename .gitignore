@@ -1,3 +1,7 @@
+# Your saved stats stay on your computer
+stats.json
+stats.json.tmp
+
 # Python
 __pycache__/
 *.py[cod]

@@ -27,6 +27,8 @@ Neer (B): banana  +14
   up to 10 people taking turns at one keyboard.
 - A live countdown on every turn. Answer quickly to earn bonus points.
 - Instant feedback when a word is rejected, so you can fix it and try again.
+- Saved stats: your win/loss record against each difficulty and a top-10
+  list of your highest-scoring words.
 - A built-in dictionary of about 112,000 English words.
 - Runs on Linux, macOS and Windows, with a single small dependency
   ([readchar](https://pypi.org/project/readchar/)).
@@ -102,21 +104,72 @@ longer words, which earn more points.
 | hard       | 8 or more       |
 | impossible | 13 or more      |
 
+## Stats
+
+After each game, Shiritori saves:
+
+- **Your record against the computer:** games played, won, and lost at each
+  difficulty.
+- **High scores:** your 10 highest-scoring words, with who played them, the
+  difficulty (or `multiplayer`), and the date. The computer's words don't
+  count.
+
+The game tells you when you've set a new high score and shows your updated
+record. To see everything, run:
+
+```sh
+shiritori --stats
+```
+
+```text
+Record against the computer
+  Difficulty  Played  Won  Lost  Win rate
+  easy             4    3     1       75%
+  medium           2    1     1       50%
+  hard             1    0     1        0%
+  impossible       0    0     0         -
+
+Multiplayer games: 2
+
+High scores
+  #  Points  Word           Player  Mode    Date
+  1      19  quadrilateral  Neer    hard    2026-10-08
+  2      18  leptopteris    Neer    easy    2026-10-08
+  3      16  rusticity      Neer    medium  2026-10-07
+```
+
+Only games played with the standard rules count, so records stay comparable.
+Games with a custom `--target-score` or `--turn-time` aren't recorded. Games
+you quit with Ctrl+C aren't recorded either.
+
+Stats are stored on your computer and never uploaded:
+
+- **Running from a clone:** `stats.json` in the project folder. It's listed in
+  `.gitignore`, so it never gets committed.
+- **Installed with pipx:** `~/.local/share/shiritori/stats.json` on Linux,
+  `~/Library/Application Support/shiritori/stats.json` on macOS, or
+  `%APPDATA%\shiritori\stats.json` on Windows.
+
+To keep stats somewhere else, set the `SHIRITORI_STATS_FILE` environment
+variable to a file path. To start over, run `shiritori --reset-stats`.
+
 ## Options
 
 ```text
-shiritori [--target-score POINTS] [--turn-time SECONDS]
+shiritori [--target-score POINTS] [--turn-time SECONDS] [--stats | --reset-stats]
 ```
 
-| Option                   | Default | Description                       |
-| ------------------------ | ------- | --------------------------------- |
-| `--target-score POINTS`  | 100     | Points needed to win              |
-| `--turn-time SECONDS`    | 10      | Seconds on the clock each turn    |
-| `--version`              |         | Show the version and exit         |
-| `-h`, `--help`           |         | Show help and a summary of rules  |
+| Option                   | Default | Description                              |
+| ------------------------ | ------- | ---------------------------------------- |
+| `--target-score POINTS`  | 100     | Points needed to win                     |
+| `--turn-time SECONDS`    | 10      | Seconds on the clock each turn           |
+| `--stats`                |         | Show your record and high scores         |
+| `--reset-stats`          |         | Erase your stats (asks first)            |
+| `--version`              |         | Show the version and exit                |
+| `-h`, `--help`           |         | Show help and a summary of rules         |
 
 For a quick game, try `shiritori --target-score 50`. For a more relaxed one,
-try `shiritori --turn-time 30`.
+try `shiritori --turn-time 30`. Neither counts toward your stats.
 
 ## Development
 
@@ -144,6 +197,7 @@ shiritori/
 ├── cli.py        Command-line options, game setup, and the turn loop
 ├── game.py       Rules: turn order, word validation, and scoring
 ├── computer.py   The computer opponent and its difficulty levels
+├── stats.py      Saved records and high scores
 ├── terminal.py   The title banner and the live countdown prompt
 ├── words.py      Loading and indexing the dictionary
 └── words.txt     The word list, one lowercase word per line
@@ -153,3 +207,10 @@ tests/            The pytest test suite
 The game logic in `game.py`, `computer.py`, and `words.py` doesn't do any
 terminal input or output, so it's easy to test or reuse in a different
 interface.
+
+The tests never touch your real stats. Each test gets its own temporary
+stats file.
+
+## License
+
+Shiritori is released under the [MIT License](LICENSE).
