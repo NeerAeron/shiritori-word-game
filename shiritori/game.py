@@ -25,8 +25,9 @@ class Move:
     player: Player
     word: str
     points: int
-    multiplier: float = 1.0  # The bonus multiplier applied to the points, if any
+    multiplier: float = 1.0  # The game bonus multiplier applied to the points, if any
     time_bonus: int = 0  # Seconds left on the clock (negative once it ran out)
+    round_bonus: int = 0  # Points from the turn's round bonus
 
 
 class Game:
@@ -104,33 +105,39 @@ class Game:
         return None
 
     def multiplier_for(self, word: str) -> float:
-        """Return the bonus multiplier *word* would earn. Classic games have no bonuses."""
+        """Return the game bonus multiplier *word* would earn. Classic games have no bonuses."""
         return 1.0
+
+    def round_points(self, word: str) -> int:
+        """Return the round bonus points *word* would earn. Classic games have no bonuses."""
+        return 0
 
     def score(self, word: str, seconds: float) -> int:
         """Return the points for playing *word* after *seconds* of thinking."""
-        return self._score(word, seconds)[0]
+        return self._move(word.lower(), seconds).points
 
-    def _score(self, word: str, seconds: float) -> tuple[int, float, int]:
-        """Return the points, the bonus multiplier applied, and the time bonus."""
-        points = round(len(word) + self.turn_time - seconds)
-        # A bonus multiplies a positive score, but never makes a penalty worse.
+    def _move(self, word: str, seconds: float) -> Move:
+        """Score *word* for the current player: letters, round bonus, and seconds left."""
+        time_bonus = round(len(word) + self.turn_time - seconds) - len(word)
+        round_bonus = self.round_points(word)
+        points = len(word) + round_bonus + time_bonus
+        # The game bonus multiplies a positive score, but never makes a penalty worse.
         multiplier = self.multiplier_for(word) if points > 0 else 1.0
-        return round(points * multiplier), multiplier, points - len(word)
+        points = round(points * multiplier)
+        return Move(self.current_player, word, points, multiplier, time_bonus, round_bonus)
 
     def play(self, word: str, seconds: float) -> int:
         """Play *word* for the current player and return the points it scored."""
         problem = self.check_word(word)
         if problem:
             raise ValueError(f"Can't play {word!r}: {problem}.")
-        word = word.lower()
-        points, multiplier, time_bonus = self._score(word, seconds)
-        self.current_player.score += points
-        self.moves.append(Move(self.current_player, word, points, multiplier, time_bonus))
-        self.used_words.add(word)
-        self.letter = word[-1].upper()
+        move = self._move(word.lower(), seconds)
+        self.current_player.score += move.points
+        self.moves.append(move)
+        self.used_words.add(move.word)
+        self.letter = move.word[-1].upper()
         self._turn += 1
-        return points
+        return move.points
 
     def skip(self) -> None:
         """End the current player's turn without a word; the next player gets a new letter."""

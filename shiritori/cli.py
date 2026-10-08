@@ -44,6 +44,7 @@ How to play
 
   Score a point per letter, plus a point per second left on the clock
   ({CLASSIC_CLOCK}s, or {CHALLENGE_CLOCK}s in challenge mode). Run out of time and you lose points.
+  "(5L + 8s)" means 5 letters and 8 seconds left.
 
   Reaching {TARGET} points ({CHALLENGE_TARGET} in challenge mode) ends the game once
   everyone has had the same number of turns. Highest score wins.
@@ -51,8 +52,9 @@ How to play
 Challenge mode
 
   Every word must also meet a challenge that changes each turn, like "end
-  with S". Words that also meet the game's bonus challenge score extra.
-  Vowels are A, E, I, O, and U.
+  with S". Each turn has a round bonus too, like "+2 per D" (B in the
+  score), and each game has a bonus, like "include Q", that multiplies the
+  points of words that meet it. Vowels are A, E, I, O, and U.
 
 Players
 
@@ -189,17 +191,24 @@ def scoreboard(players: Sequence[Player]) -> str:
 
 
 def breakdown(move: Move) -> str:
-    """How a word's points add up: letters plus seconds left, such as "(11 + 6s, x2 bonus)"."""
+    """How a word's points add up, such as "(6L + 3B + 18s) x2.4".
+
+    That's 6 letters, a 3-point round bonus and 18 seconds left, times the
+    game bonus.
+    """
+    parts = f"{len(move.word)}L"
+    if move.round_bonus:
+        parts += f" + {move.round_bonus}B"
     sign = "+" if move.time_bonus >= 0 else "-"
-    parts = f"{len(move.word)} {sign} {abs(move.time_bonus)}s"
+    text = f"({parts} {sign} {abs(move.time_bonus)}s)"
     if move.multiplier > 1:
-        parts += f", x{move.multiplier:g} bonus"
-    return f"({parts})"
+        text += f" x{move.multiplier:g}"
+    return text
 
 
 def show_bonus(game: ChallengeGame, sleep: Callable[[float], None], seconds: int = 5) -> None:
-    """Announce the game's bonus challenge, and give players a moment to read it."""
-    print(f"\n  BONUS x{game.multiplier:g}: {game.bonus.text}\n")
+    """Announce the game bonus, and give players a moment to read it."""
+    print(f"\n  GAME BONUS x{game.multiplier:g}: {game.bonus.text}\n")
     for left in range(seconds, 0, -1):
         print(f"\r  Starting in {left}...", end="", flush=True)
         sleep(1)
@@ -226,8 +235,8 @@ def play(
             label = f"{player.name} ({game.letter})"
             if isinstance(game, ChallengeGame):
                 print(
-                    f"  Challenge: {game.challenge.text}"
-                    f"   (bonus x{game.multiplier:g}: {game.bonus.text})"
+                    f"  Challenge: {game.challenge.text} | {game.round_bonus.text}"
+                    f" | x{game.multiplier:g}: {game.bonus.text}"
                 )
 
             if isinstance(player, ComputerPlayer):

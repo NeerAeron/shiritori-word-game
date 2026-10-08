@@ -7,16 +7,16 @@ last one ended. This English version runs in your terminal. Race the clock
 against the computer, or up to 4 friends on one keyboard.
 
 ```text
-Neer (T): tiger  +13  (5 + 8s)
+Neer (T): tiger  +13  (5L + 8s)
     Neer: 13 | Computer: 0
-Computer (R): rhubarb  +16  (7 + 9s)
+Computer (R): rhubarb  +16  (7L + 9s)
     Neer: 13 | Computer: 16
   8 | Neer (B): bana
 ```
 
 ## Features
 
-- **Two modes:** classic, and challenge mode with a new spelling challenge every turn
+- **Two modes:** classic, and challenge mode with new challenges and bonuses every turn
 - **Five computer levels**, from beginner to impossible
 - **Fair turns:** everyone gets the same number of turns
 - **Saved stats:** records, high scores, favorite and longest words
@@ -43,9 +43,9 @@ shiritori
 
 - Name a word that starts with the last letter of the previous word.
 - Words must be real, 3+ letters, A–Z only, and not already played this game.
-- **Score:** a point per letter, plus a point per second left on the clock.
-  Run out of time and you lose a point per second over.
-- **Win:** reach 100 points (150 in challenge mode). The round is played out
+- **Score:** a point per letter, plus a point per second left on the clock,
+  shown as `(5L + 8s)`. Run out of time and you lose a point per second over.
+- **Win:** reach 100 points (200 in challenge mode). The round is played out
   so everyone gets the same number of turns, then the highest score wins.
 
 Type a word and press **Enter**. **Backspace** fixes mistakes, **Ctrl+C**
@@ -54,18 +54,23 @@ quits. Run `python play.py --rules` for a refresher in the terminal.
 ## Challenge mode
 
 Every word must also meet a challenge that changes each turn, such as *end
-with S*, *no letter E*, or *hide an animal (ANT, BAT, CAT…)*. There are 131,
-and harder computer levels get harder challenges. Vowels are A, E, I, O, U.
+with S*, *no letter E*, or *hide an animal (ANT, BAT, CAT…)*. There are 119,
+each leaving at least 100 words to choose from, and harder computer levels
+get harder ones. Vowels are A, E, I, O, U.
 
-Each game also has a **bonus challenge**. Words that meet it too score
-1.5x–3x:
+Two bonuses add to your score:
+
+- **Round bonus:** a new one each turn, such as *+2 per D* or *+3 per double
+  letter*. It shows up as `B` in the score.
+- **Game bonus:** one per game, such as *include Q* or *U is the only vowel*.
+  Words that meet it score 1.5x–3x, and the harder the bonus, the more it pays.
 
 ```text
-  Challenge: include Y   (bonus x2.3: U is the only vowel)
-Neer (D): dusty  +51  (5 + 17s, x2.3 bonus)
+  Challenge: include Y | +2 per D | x2.3: U is the only vowel
+Neer (D): dusty  +51  (5L + 2B + 15s) x2.3
 ```
 
-Challenge mode has a 20-second clock and plays to 150.
+Challenge mode has a 20-second clock and plays to 200.
 
 ## Computer levels
 
@@ -78,7 +83,8 @@ Challenge mode has a 20-second clock and plays to 150.
 | impossible | 10–16       | the most         |
 
 Like a person, the computer is quicker with common letters like S and slower
-with awkward ones like Y. Tactical levels try to leave you an awkward letter.
+with awkward ones like Y. Tactical levels try to leave you an awkward letter,
+and harder levels go for bonuses more often.
 
 ## Stats
 
@@ -94,7 +100,7 @@ with a custom `--target-score` or `--turn-time` don't count.
 
 | Option                  | What it does                                    |
 | ----------------------- | ----------------------------------------------- |
-| `--target-score POINTS` | Points to win (default 100, or 150 in challenge) |
+| `--target-score POINTS` | Points to win (default 100, or 200 in challenge) |
 | `--turn-time SECONDS`   | Seconds per turn (default 10, or 20 in challenge) |
 | `--rules`               | Explain how to play                             |
 | `--stats`               | Show your stats                                 |

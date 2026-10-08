@@ -1,13 +1,15 @@
-"""Challenge mode: a new spelling challenge every turn, and a bonus challenge for the whole game.
+"""Challenge mode: a new challenge and round bonus every turn, and a bonus for the whole game.
 
-Every word must meet the turn's challenge. Words that also meet the game's
-bonus challenge have their points multiplied. Vowels are A, E, I, O and U;
-Y counts as a consonant. No challenge depends on word length or time.
+Every word must meet the turn's challenge. The round bonus adds points, such
+as "+2 per D", and words that meet the game's bonus have their points
+multiplied. Vowels are A, E, I, O and U; Y counts as a consonant. No
+challenge or bonus depends on word length or time.
 """
 
 from __future__ import annotations
 
 import random
+import re
 from collections import Counter, deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -144,16 +146,11 @@ HARD = (
     Challenge("use one letter three times", lambda word: max(Counter(word).values()) >= 3),
     _without("a", "e"),
     _without("e", "i"),
-    *(_includes(letter) for letter in "zxj"),
     *(_includes(pair) for pair in ("qu", "ph", "gh", "tt")),
-    Challenge("four consonants in a row", lambda word: _has_run(word, 4, vowels=False)),
-    Challenge("start with three consonants", lambda word: all(map(_is_consonant, word[:3]))),
-    *(_ends_with(ending) for ending in ("est", "ist", "ate", "ity", "ous", "ive", "age", "ish")),
-    *(_ends_with(ending) for ending in ("ness", "less", "ment")),
+    *(_ends_with(ending) for ending in ("est", "ist", "ate", "ity", "ous", "ive")),
     _hides("a color", "red", "tan", "blue", "pink", "gold"),
     _hides("a number", "one", "two", "six", "ten"),
-    *(_hides_word(hidden) for hidden in ("and", "all", "man", "end", "art", "car", "out")),
-    *(_hides_word(hidden) for hidden in ("pin", "use", "ice")),
+    *(_hides_word(hidden) for hidden in ("and", "all", "man", "end", "art", "car", "out", "ice")),
 )
 
 TURN_CHALLENGES = (*EASY, *MEDIUM, *HARD)
@@ -180,122 +177,116 @@ def challenge_weights(difficulty: str) -> list[float]:
     return [x ** (alpha - 1) * (1 - x) ** (beta - 1) for x in positions]
 
 
-def _double_and(word: str, test: Callable[[str], bool]) -> bool:
-    return _has_double(word) and test(word)
-
-
-# Bonus challenges by their multiplier before the random nudge: harder ones pay
-# more. Every game picks one of them at random, each equally likely, so how many
-# sit at each multiplier sets how common it is: 2x is the most common, 1.5x is
-# slightly rarer, and 3x, the most a bonus can pay, is rarer still.
-BONUS_CHALLENGES = {
+# Game bonuses: one per game, picked at random. A word that meets it has its
+# points multiplied. Each is a single, hard condition, grouped by its base
+# multiplier: the fewer turns that offer plenty of words for it, the more it
+# pays. None is out of reach for long, so nothing like "use all five vowels".
+GAME_BONUSES = {
     1.5: (
-        Challenge("include J, Q, X, or Z", lambda word: bool(set(word) & set("jqxz"))),
-        Challenge(
-            "use the same vowel three times",
-            lambda word: any(word.count(vowel) >= 3 for vowel in VOWELS),
-        ),
-        Challenge("no A, E, or I", lambda word: not set(word) & set("aei")),
-        Challenge("no E, I, or O", lambda word: not set(word) & set("eio")),
-        Challenge("no A, E, or O", lambda word: not set(word) & set("aeo")),
-        Challenge("include four different vowels", lambda word: len(set(word) & VOWELS) >= 4),
-        Challenge(
-            "a double letter and no E", lambda word: _double_and(word, lambda w: "e" not in w)
-        ),
+        Challenge("include a double vowel", lambda word: bool(re.search(r"([aeiou])\1", word))),
+        Challenge("more vowels than consonants", lambda word: 2 * _vowel_count(word) > len(word)),
+        _only_vowel("e"),
+        _only_vowel("a"),
     ),
     2.0: (
-        Challenge("more vowels than consonants", lambda word: 2 * _vowel_count(word) > len(word)),
-        _only_vowel("a"),
-        _only_vowel("e"),
-        _only_vowel("u"),
-        Challenge(
-            "a double letter and end with Y",
-            lambda word: _double_and(word, lambda w: w.endswith("y")),
-        ),
-        Challenge(
-            "a double letter and end with E",
-            lambda word: _double_and(word, lambda w: w.endswith("e")),
-        ),
-        Challenge("no E and end with Y", lambda word: "e" not in word and word.endswith("y")),
-        Challenge("include P and end with Y", lambda word: "p" in word and word.endswith("y")),
-        Challenge("include H and end with Y", lambda word: "h" in word and word.endswith("y")),
-        Challenge(
-            "include B and a double letter", lambda word: _double_and(word, lambda w: "b" in w)
-        ),
-    ),
-    2.5: (
+        Challenge("four consonants in a row", lambda word: _has_run(word, 4, vowels=False)),
+        Challenge("no A, E, or I", lambda word: not set(word) & set("aei")),
         _only_vowel("i"),
         _only_vowel("o"),
-        Challenge("three vowels in a row", lambda word: _has_run(word, 3, vowels=True)),
-        Challenge("include V and end with E", lambda word: "v" in word and word.endswith("e")),
-        Challenge(
-            "include K and a double letter", lambda word: _double_and(word, lambda w: "k" in w)
-        ),
-        Challenge(
-            "include F and a double letter", lambda word: _double_and(word, lambda w: "f" in w)
-        ),
-        Challenge(
-            "include J, Q, X, or Z and end with a vowel",
-            lambda word: bool(set(word) & set("jqxz")) and word[-1] in VOWELS,
-        ),
-        Challenge(
-            "two vowels in a row and end with Y",
-            lambda word: _has_run(word, 2, vowels=True) and word.endswith("y"),
-        ),
+        _only_vowel("u"),
+    ),
+    2.5: (
+        _includes("x"),
+        _includes("z"),
+        _includes("q"),
     ),
     3.0: (
-        Challenge("use all five vowels", lambda word: set(word) >= VOWELS),
-        Challenge(
-            "two different double letters",
-            lambda word: len({a for a, b in pairwise(word) if a == b}) >= 2,
-        ),
-        Challenge("include W and Y", lambda word: "w" in word and "y" in word),
-        Challenge(
-            "include two of J, K, Q, V, X, Z", lambda word: len(set(word) & set("jkqvxz")) >= 2
-        ),
-        Challenge("use one letter four times", lambda word: max(Counter(word).values()) >= 4),
+        Challenge("three vowels in a row", lambda word: _has_run(word, 3, vowels=True)),
+        _includes("j"),
+        Challenge("two double letters", lambda word: len(re.findall(r"(.)\1", word)) >= 2),
     ),
 }
+MIN_MULTIPLIER = 1.5
 MAX_MULTIPLIER = 3.0
 
 
-def pick_bonus(rng: random.Random) -> tuple[Challenge, float]:
-    """Choose a game's bonus challenge, every one equally likely, and its multiplier."""
-    base, challenge = rng.choice(
-        [
-            (base, challenge)
-            for base, challenges in BONUS_CHALLENGES.items()
-            for challenge in challenges
-        ]
+def pick_game_bonus(rng: random.Random) -> tuple[Challenge, float]:
+    """Choose a game's bonus, every one equally likely, and its multiplier."""
+    base, bonus = rng.choice(
+        [(base, bonus) for base, bonuses in GAME_BONUSES.items() for bonus in bonuses]
     )
     # Nudge the multiplier by about 10% either way so no two games are quite alike.
     multiplier = round(base * rng.lognormvariate(0, 0.1), 1)
-    return challenge, min(max(multiplier, 1.2), MAX_MULTIPLIER)
+    return bonus, min(max(multiplier, MIN_MULTIPLIER), MAX_MULTIPLIER)
+
+
+@dataclass(frozen=True)
+class RoundBonus:
+    """Extra points for one word, such as "+2 per E"."""
+
+    text: str
+    points: Callable[[str], int]
+
+
+def _per_letter(letter: str, value: int) -> RoundBonus:
+    return RoundBonus(f"+{value} per {letter.upper()}", lambda word: value * word.count(letter))
+
+
+# Round bonuses: a new one every word, adding points to whatever the word
+# scores. Rarer letters are worth more, so a word that goes for one usually
+# earns about +2 to +6.
+ROUND_BONUSES = (
+    *(_per_letter(letter, 1) for letter in "eaisrntol"),
+    *(_per_letter(letter, 2) for letter in "cdumgphby"),
+    *(_per_letter(letter, 3) for letter in "fvkw"),
+    *(_per_letter(letter, 5) for letter in "zxjq"),
+    RoundBonus("+1 per vowel", _vowel_count),
+    RoundBonus(
+        "+2 per vowel pair",
+        lambda word: 2 * sum(a in VOWELS and b in VOWELS for a, b in pairwise(word)),
+    ),
+    RoundBonus("+3 per double letter", lambda word: 3 * len(re.findall(r"(.)\1", word))),
+    RoundBonus("+3 if it ends in Y", lambda word: 3 * word.endswith("y")),
+    RoundBonus("+2 if it ends in a vowel", lambda word: 2 * (word[-1] in VOWELS)),
+    RoundBonus("+3 if no letter repeats", lambda word: 3 * (len(set(word)) == len(word))),
+)
+NO_ROUND_BONUS = RoundBonus("no round bonus", lambda word: 0)
+
+
+def _earning_share(bonus: RoundBonus, words: Sequence[str]) -> float:
+    """The share of *words* that earn any points from *bonus*."""
+    return sum(bonus.points(word) > 0 for word in words) / max(len(words), 1)
 
 
 # A turn challenge must leave at least this many unplayed words for the letter.
-MIN_CHOICES = 15
+MIN_CHOICES = 100
 # Challenges that nearly every word for the letter meets are no challenge at all.
 MAX_SHARE = 0.9
+# A challenge whose words nearly all earn the game bonus would hand it out.
+FREE_BONUS_SHARE = 0.8
 # Don't repeat any of the last this many challenges.
 RECENT_TURNS = 20
 # Once a fair challenge is found, look at most this far for one that keeps the bonus in reach.
 SEARCH_LIMIT = 30
-# Free choice, for the rare letter where no challenge works.
+# Free choice, for letters like X where no challenge leaves enough words.
 ANY_WORD = Challenge("any word you like", lambda word: True)
 
 
 class ChallengeGame(Game):
     """A game in challenge mode.
 
-    The rules are the same as a classic game, with a longer turn clock, plus:
-    every word must meet the turn's challenge, which changes every turn, and
-    words that also meet the game's bonus challenge have their points multiplied.
+    The rules are the same as a classic game, with a longer turn clock and a
+    higher target, plus:
+
+    - every word must meet the turn's challenge, which changes every turn;
+    - each turn has a round bonus that adds points, such as "+2 per E";
+    - words that meet the game's bonus have their points multiplied.
+
     *difficulty* sets how hard the turn challenges tend to be.
     """
 
     mode = "challenge"
-    default_target_score = 150
+    default_target_score = 200
     default_turn_time = 20
 
     def __init__(
@@ -311,9 +302,11 @@ class ChallengeGame(Game):
         super().__init__(players, words, target_score=target_score, turn_time=turn_time, rng=rng)
         self.difficulty = difficulty
         self._weights = challenge_weights(difficulty)
-        self.bonus, self.multiplier = pick_bonus(self._rng)
+        self.bonus, self.multiplier = pick_game_bonus(self._rng)
         self._recent: deque[Challenge] = deque(maxlen=RECENT_TURNS)
+        self.round_bonus = NO_ROUND_BONUS
         self.challenge = self._pick_challenge()
+        self.round_bonus = self._pick_round_bonus()
 
     def check_word(self, word: str) -> str | None:
         problem = super().check_word(word)
@@ -324,27 +317,36 @@ class ChallengeGame(Game):
     def multiplier_for(self, word: str) -> float:
         return self.multiplier if self.bonus.test(word.lower()) else 1.0
 
+    def round_points(self, word: str) -> int:
+        return self.round_bonus.points(word.lower())
+
     def play(self, word: str, seconds: float) -> int:
         points = super().play(word, seconds)
         self.challenge = self._pick_challenge()
+        self.round_bonus = self._pick_round_bonus()
         return points
 
     def skip(self) -> None:
         super().skip()
         self.challenge = self._pick_challenge()
+        self.round_bonus = self._pick_round_bonus()
 
-    def _pick_challenge(self) -> Challenge:
-        """Choose a fair challenge for the current letter.
-
-        It must leave plenty of words to choose from without being met by
-        nearly all of them. Challenges that leave the bonus within reach (but
-        don't hand it out for free) are preferred.
-        """
-        options = [
+    def _unplayed_words(self) -> list[str]:
+        return [
             word
             for word in self.words.starting_with(self.letter)
             if word not in self.used_words and len(word) >= MIN_WORD_LENGTH
         ]
+
+    def _pick_challenge(self) -> Challenge:
+        """Choose a fair challenge for the current letter.
+
+        It must leave at least MIN_CHOICES words to choose from without being
+        met by nearly all of them. Challenges that leave the game bonus within
+        reach, without handing it out, are preferred. If no challenge leaves
+        enough words, any word will do.
+        """
+        options = self._unplayed_words()
         bonus_options = [word for word in options if self.bonus.test(word)]
         fallback = best = None
         best_count = 0
@@ -357,15 +359,36 @@ class ChallengeGame(Game):
             if not MIN_CHOICES <= count <= MAX_SHARE * len(options):
                 continue
             with_bonus = sum(map(challenge.test, bonus_options))
-            if with_bonus == count:
-                continue  # Every word would earn the bonus, so it would come for free.
+            if with_bonus > FREE_BONUS_SHARE * count:
+                continue  # Like "include QU" with the bonus "include Q"
             if with_bonus >= 3:
                 fallback = challenge
                 break
-            fallback = fallback or challenge
-        chosen = fallback or best or ANY_WORD
+            fallback = fallback or challenge  # Like "no letter E" with "E is the only vowel"
+        if fallback is None and best_count >= MIN_CHOICES:
+            fallback = best  # Leaves enough words, though nearly all of them
+        chosen = fallback or ANY_WORD
         self._recent.append(chosen)
         return chosen
+
+    def _pick_round_bonus(self) -> RoundBonus:
+        """Choose a new round bonus that the turn's challenge doesn't spoil.
+
+        The challenge spoils a bonus if it rules the bonus out, like "+2 per D"
+        with "no letter D", or makes it automatic, like "+2 per D" with
+        "include D". Bonuses most words earn anyway, like "+1 per vowel", are fine.
+        """
+        options = self._unplayed_words()
+        matches = [word for word in options if self.challenge.test(word)] or options
+        bonuses = [bonus for bonus in ROUND_BONUSES if bonus is not self.round_bonus]
+        self._rng.shuffle(bonuses)
+        for bonus in bonuses:
+            earned, usually = _earning_share(bonus, matches), _earning_share(bonus, options)
+            ruled_out = earned < usually / 4
+            automatic = earned > 0.95 and usually < 0.9
+            if earned and not ruled_out and not automatic:
+                return bonus
+        return bonuses[0]
 
     def _shuffled_challenges(self) -> list[Challenge]:
         """Turn challenges in a random order that favors likelier ones, skipping recent ones."""

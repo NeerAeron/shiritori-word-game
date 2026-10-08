@@ -1,30 +1,34 @@
 import random
 import re
 from collections import Counter
+from itertools import pairwise
 
 import pytest
 
 from shiritori.challenges import (
     ANY_WORD,
-    BONUS_CHALLENGES,
     CHALLENGE_CURVES,
     EASY,
+    GAME_BONUSES,
     HARD,
     MAX_MULTIPLIER,
     MEDIUM,
     MIN_CHOICES,
+    MIN_MULTIPLIER,
     RECENT_TURNS,
+    ROUND_BONUSES,
     TURN_CHALLENGES,
     Challenge,
     ChallengeGame,
+    RoundBonus,
     challenge_weights,
-    pick_bonus,
+    pick_game_bonus,
 )
-from shiritori.game import Game, Player
+from shiritori.game import STARTING_LETTERS, Game, Player
 from shiritori.words import WordList
 
 WORDS = WordList.default()
-ALL_BONUSES = [c for challenges in BONUS_CHALLENGES.values() for c in challenges]
+ALL_BONUSES = [bonus for bonuses in GAME_BONUSES.values() for bonus in bonuses]
 TIER_OF = {
     c.text: tier for tier, cs in (("easy", EASY), ("medium", MEDIUM), ("hard", HARD)) for c in cs
 }
@@ -40,9 +44,9 @@ def test_there_are_over_110_different_turn_challenges():
     assert (*EASY, *MEDIUM, *HARD) == TURN_CHALLENGES
 
 
-def test_there_are_30_different_bonus_challenges():
-    assert len(ALL_BONUSES) == 30
-    assert len({bonus.text for bonus in ALL_BONUSES}) == 30
+def test_there_are_15_different_game_bonuses():
+    assert len(ALL_BONUSES) == 15
+    assert len({bonus.text for bonus in ALL_BONUSES}) == 15
     assert not {bonus.text for bonus in ALL_BONUSES} & {c.text for c in TURN_CHALLENGES}
 
 
@@ -59,9 +63,18 @@ def test_turn_challenges_are_never_too_hard(challenge):
 
 
 @pytest.mark.parametrize("bonus", ALL_BONUSES, ids=lambda c: c.text)
-def test_bonus_challenges_are_hard_but_doable(bonus):
+def test_game_bonuses_are_hard(bonus):
     share = sum(map(bonus.test, WORDS)) / len(WORDS)
-    assert 0.005 <= share <= 0.15
+    assert 0.01 <= share <= 0.06
+
+
+@pytest.mark.parametrize("bonus", ALL_BONUSES, ids=lambda c: c.text)
+def test_game_bonuses_are_never_out_of_reach_for_long(bonus):
+    # Unlike, say, "use all five vowels": no starting letter has 10 short words for it.
+    def plenty(letter):
+        return sum(len(word) <= 8 and bonus.test(word) for word in WORDS.starting_with(letter))
+
+    assert sum(plenty(letter) >= 10 for letter in STARTING_LETTERS) >= len(STARTING_LETTERS) / 2
 
 
 @pytest.mark.parametrize(
@@ -78,9 +91,7 @@ def test_bonus_challenges_are_hard_but_doable(bonus):
         ("three consonants in a row", "strong", "stone"),
         ("end with two consonants", "hand", "hello"),
         ("end with a vowel and include a double letter", "coffee", "coffees"),
-        ("start with three consonants", "string", "stone"),
         ("use one letter three times", "banana", "band"),
-        ("four consonants in a row", "length", "strong"),
         ("no letter A or E", "song", "sang"),
         ("hide the word ICE", "office", "offer"),
     ],
@@ -94,49 +105,98 @@ def test_turn_challenges_check_what_they_say(text, yes, no):
 @pytest.mark.parametrize(
     ("text", "yes", "no"),
     [
-        ("use all five vowels", "education", "elephant"),
-        ("two different double letters", "coffee", "apple"),
-        ("include two of J, K, Q, V, X, Z", "jinx", "jam"),
+        ("include a double vowel", "moon", "moan"),
         ("more vowels than consonants", "audio", "studio"),
+        ("E is the only vowel", "tree", "tire"),
         ("A is the only vowel", "banana", "bandit"),
+        ("four consonants in a row", "length", "strong"),
         ("no A, E, or I", "song", "sing"),
-        ("a double letter and end with Y", "happy", "happen"),
-        ("a double letter and no E", "happy", "apple"),
-        ("include four different vowels", "question", "banana"),
-        ("include J, Q, X, or Z and end with a vowel", "quite", "quit"),
-        ("two vowels in a row and end with Y", "beauty", "baby"),
-        ("use one letter four times", "assess", "asses"),
+        ("I is the only vowel", "fishing", "fished"),
+        ("O is the only vowel", "cotton", "button"),
+        ("U is the only vowel", "dusty", "dusted"),
+        ("include X", "taxi", "talk"),
+        ("include Z", "pizza", "pita"),
+        ("include Q", "quiet", "diet"),
         ("three vowels in a row", "beautiful", "bread"),
+        ("include J", "enjoy", "envoy"),
+        ("two double letters", "coffee", "apple"),
     ],
 )
-def test_bonus_challenges_check_what_they_say(text, yes, no):
+def test_game_bonuses_check_what_they_say(text, yes, no):
     bonus = next(c for c in ALL_BONUSES if c.text == text)
     assert bonus.test(yes)
     assert not bonus.test(no)
 
 
-def test_bonus_multipliers_peak_at_two_and_never_pass_three():
-    counts = {base: len(challenges) for base, challenges in BONUS_CHALLENGES.items()}
+def test_game_bonus_multipliers_peak_at_two_and_stay_between_one_and_a_half_and_three():
+    counts = {base: len(bonuses) for base, bonuses in GAME_BONUSES.items()}
     assert max(counts, key=counts.get) == 2.0
     assert counts[1.5] < counts[2.0]  # small multipliers are slightly rarer...
     assert counts[3.0] == min(counts.values())  # ...and the biggest are rarest
-    assert max(BONUS_CHALLENGES) <= MAX_MULTIPLIER == 3.0
+    assert MIN_MULTIPLIER == 1.5 == min(GAME_BONUSES)
+    assert MAX_MULTIPLIER == 3.0 == max(GAME_BONUSES)
 
 
-def test_every_bonus_challenge_is_equally_likely_with_a_little_randomness():
+def test_every_game_bonus_is_equally_likely_with_a_little_randomness():
     rng = random.Random(1)
-    picks = [pick_bonus(rng) for _ in range(30_000)]
-    base_of = {c.text: base for base, challenges in BONUS_CHALLENGES.items() for c in challenges}
+    picks = [pick_game_bonus(rng) for _ in range(30_000)]
+    base_of = {bonus.text: base for base, bonuses in GAME_BONUSES.items() for bonus in bonuses}
 
-    counts = Counter(challenge.text for challenge, _ in picks)
-    assert len(counts) == 30
-    assert all(800 <= count <= 1200 for count in counts.values())  # about 1,000 each
+    counts = Counter(bonus.text for bonus, _ in picks)
+    assert len(counts) == 15
+    assert all(1800 <= count <= 2200 for count in counts.values())  # about 2,000 each
 
-    nudges = [multiplier / base_of[challenge.text] for challenge, multiplier in picks]
+    nudges = [multiplier / base_of[bonus.text] for bonus, multiplier in picks]
     assert sum(abs(nudge - 1) <= 0.2 for nudge in nudges) / len(nudges) > 0.95
-    assert all(1.2 <= multiplier <= 3.0 for _, multiplier in picks)
+    assert all(1.5 <= multiplier <= 3.0 for _, multiplier in picks)
     assert all(multiplier == round(multiplier, 1) for _, multiplier in picks)
     assert len({multiplier for _, multiplier in picks}) > 10  # not just the base values
+
+
+def test_there_are_over_30_short_round_bonuses():
+    texts = [bonus.text for bonus in ROUND_BONUSES]
+    assert len(texts) >= 30
+    assert len(set(texts)) == len(texts)
+    assert all(re.fullmatch(r"\+\d [a-zA-Z ]+", text) and len(text) <= 24 for text in texts)
+
+
+@pytest.mark.parametrize(
+    ("text", "word", "points"),
+    [
+        ("+1 per E", "excellence", 4),
+        ("+2 per D", "added", 6),
+        ("+3 per K", "kayak", 6),
+        ("+5 per Z", "pizzazz", 20),
+        ("+5 per Q", "cat", 0),
+        ("+1 per vowel", "education", 5),
+        ("+2 per vowel pair", "queue", 6),
+        ("+3 per double letter", "bookkeeper", 9),
+        ("+3 if it ends in Y", "happy", 3),
+        ("+3 if it ends in Y", "yes", 0),
+        ("+2 if it ends in a vowel", "tree", 2),
+        ("+3 if no letter repeats", "planet", 3),
+        ("+3 if no letter repeats", "apple", 0),
+    ],
+)
+def test_round_bonuses_add_what_they_say(text, word, points):
+    bonus = next(b for b in ROUND_BONUSES if b.text == text)
+    assert bonus.points(word) == points
+
+
+def test_rarer_letters_earn_more_round_bonus_points():
+    value = {}
+    for bonus in ROUND_BONUSES:
+        if match := re.fullmatch(r"\+(\d) per ([A-Z])", bonus.text):
+            value[match[2].lower()] = int(match[1])
+    assert sorted(value) == list("abcdefghijklmnopqrstuvwxyz")
+
+    def share(letter):
+        return sum(letter in word for word in WORDS) / len(WORDS)
+
+    by_share = sorted(value, key=share, reverse=True)
+    assert [value[letter] for letter in by_share] == sorted(value.values())
+    assert value["e"] == 1
+    assert value["z"] == value["q"] == 5
 
 
 def tier_shares(weights):
@@ -181,7 +241,8 @@ def test_games_pick_challenges_along_their_curve():
 
     easy, impossible = picked_tiers("easy"), picked_tiers("impossible")
     assert easy["easy"] > easy["medium"] > easy["hard"]
-    assert impossible["medium"] > impossible["easy"]
+    assert impossible["easy"] < easy["easy"]
+    assert impossible["medium"] > easy["medium"]
     assert impossible["hard"] > easy["hard"]
 
 
@@ -202,6 +263,7 @@ def test_meeting_the_bonus_multiplies_the_points():
     game = make_game()
     game.letter = "C"
     game.challenge = ANY_WORD
+    game.round_bonus = RoundBonus("+5 per X", lambda word: 5 * word.count("x"))
     game.bonus, game.multiplier = Challenge("include Z", lambda word: "z" in word), 2.5
 
     assert game.score("cat", seconds=0) == 23  # 3 letters + 20 seconds left
@@ -210,6 +272,46 @@ def test_meeting_the_bonus_multiplies_the_points():
     game.play("craze", seconds=5)
     assert game.moves[-1].multiplier == 2.5
     assert game.players[0].score == 50
+
+
+def test_the_round_bonus_adds_points_before_the_multiplier():
+    game = make_game()
+    game.letter = "C"
+    game.challenge = ANY_WORD
+    game.round_bonus = RoundBonus("+2 per C", lambda word: 2 * word.count("c"))
+    game.bonus, game.multiplier = Challenge("include Z", lambda word: "z" in word), 2.0
+
+    assert game.score("cat", seconds=0) == 3 + 2 + 20
+    assert game.score("cozy", seconds=10) == (4 + 2 + 10) * 2
+    assert game.score("circus", seconds=30) == 6 + 4 - 10  # still counts when time ran out
+    game.play("circus", seconds=4)
+    assert game.moves[-1].round_bonus == 4
+    assert game.moves[-1].time_bonus == 16
+    assert game.players[0].score == 6 + 4 + 16
+
+
+def test_every_turn_gets_a_new_round_bonus():
+    game = make_game(seed=4)
+    bonuses = []
+    for _ in range(60):
+        bonuses.append(game.round_bonus)
+        game.skip()
+    assert all(bonus in ROUND_BONUSES for bonus in bonuses)
+    assert all(a is not b for a, b in pairwise(bonuses))
+    assert len(set(bonuses)) > 20
+
+
+@pytest.mark.parametrize("challenge", ["include R", "no letter R", "end with R"])
+def test_the_challenge_never_spoils_the_round_bonus(challenge):
+    game = make_game(seed=6)
+    game.letter = "S"
+    game.challenge = next(c for c in TURN_CHALLENGES if c.text == challenge)
+    picked = set()
+    for _ in range(300):
+        game.round_bonus = game._pick_round_bonus()
+        picked.add(game.round_bonus.text)
+    assert "+1 per R" not in picked  # it would be ruled out, or come with every word
+    assert "+1 per S" in picked  # every word gets it, but more S's get more
 
 
 def test_has_a_longer_clock_than_classic():
@@ -222,7 +324,7 @@ def test_every_turn_gets_a_new_fair_challenge():
     seen = []
     for _ in range(40):
         options = [w for w in WORDS.starting_with(game.letter) if game.check_word(w) is None]
-        assert len(options) >= MIN_CHOICES
+        assert len(options) >= MIN_CHOICES == 100
         seen.append(game.challenge)
         game.play(random.Random(len(seen)).choice(options), seconds=1)
 
@@ -248,15 +350,27 @@ def test_skipping_picks_a_new_letter_and_challenge():
     assert game.challenge in TURN_CHALLENGES or game.challenge is ANY_WORD
 
 
-def test_falls_back_when_few_words_are_left():
+def test_any_word_will_do_when_no_challenge_leaves_enough_words():
+    game = make_game()
+    game.letter = "X"  # Only about 100 words start with X.
+    assert game._pick_challenge() is ANY_WORD
     words = WordList(["xenon", "xerox", "xylem"])
     game = ChallengeGame([Player("Ann"), Player("Bob")], words, rng=random.Random(0))
     game.letter = "X"
-    challenge = game._pick_challenge()
-    assert any(challenge.test(word) for word in ("xenon", "xerox", "xylem"))
+    assert game._pick_challenge() is ANY_WORD
+    assert game._pick_round_bonus() in ROUND_BONUSES
 
 
-def test_challenge_games_play_to_150():
-    assert make_game().target_score == 150
+def test_avoids_challenges_that_hand_out_the_game_bonus():
+    game = make_game(seed=8)
+    game.letter = "S"
+    game.bonus = next(bonus for bonus in ALL_BONUSES if bonus.text == "include a double vowel")
+    picked = {game._pick_challenge().text for _ in range(300)}
+    assert len(picked) > 50
+    assert not picked & {"include EE", "include OO"}
+
+
+def test_challenge_games_play_to_200():
+    assert make_game().target_score == 200
     assert Game([Player("Ann"), Player("Bob")], WORDS).target_score == 100
     assert make_game(target_score=80).target_score == 80
