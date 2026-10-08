@@ -43,16 +43,16 @@ DIFFICULTIES = {
             6,
             4.5,
             0.8,
-            thinking=2.8,
+            thinking=2.5,
             challenge_thinking=9.5,
             typing=0.25,
             bonus_chance=0.05,
         ),
         Difficulty(
-            "medium", 4, 8, 6, 1, thinking=3, challenge_thinking=9, typing=0.25, bonus_chance=0.1
+            "medium", 4, 8, 6, 1, thinking=2.7, challenge_thinking=9, typing=0.25, bonus_chance=0.1
         ),
         Difficulty(
-            "hard", 5, 10, 7, 1.5, thinking=3, challenge_thinking=8, typing=0.2, bonus_chance=0.2
+            "hard", 5, 10, 7, 1.5, thinking=2.7, challenge_thinking=8, typing=0.2, bonus_chance=0.2
         ),
         Difficulty(
             "impossible",
@@ -60,8 +60,8 @@ DIFFICULTIES = {
             12,
             9,
             1.5,
-            thinking=3,
-            challenge_thinking=6,
+            thinking=2.7,
+            challenge_thinking=6.5,
             typing=0.18,
             bonus_chance=0.25,
         ),

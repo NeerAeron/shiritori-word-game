@@ -36,7 +36,7 @@ def finished_game(players, words=("apple", "egg", "giraffe"), game_type=Game):
         game.play(word, seconds=0)
     while not game.round_complete:
         game.skip()
-    players[0].score = max(players[0].score, 100)
+    players[0].score = max(players[0].score, game.target_score)
     return game
 
 

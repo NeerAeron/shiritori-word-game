@@ -21,7 +21,7 @@ from .computer import (
     thinking_time,
     typing_delays,
 )
-from .game import DEFAULT_TARGET_SCORE, MIN_WORD_LENGTH, Game, Player
+from .game import MIN_WORD_LENGTH, Game, Player
 from .stats import Stats, StatsError, counts_toward_stats, format_stats, stats_file
 from .terminal import BANNER, Keyboard, TurnPrompt
 from .words import WordList
@@ -33,42 +33,30 @@ GAME_TYPES: dict[str, type[Game]] = {"classic": Game, "challenge": ChallengeGame
 
 CLASSIC_CLOCK = Game.default_turn_time
 CHALLENGE_CLOCK = ChallengeGame.default_turn_time
+TARGET = Game.default_target_score
+CHALLENGE_TARGET = ChallengeGame.default_target_score
 
 HOW_TO_PLAY = f"""\
-How to play Shiritori
+How to play
 
-  Take turns naming a word that starts with the last letter of the previous
-  word. Words must be in the dictionary, at least {MIN_WORD_LENGTH} letters long, and can
-  only be played once per game. Type a word and press Enter; Backspace fixes
-  mistakes, and Ctrl+C quits.
+  Name a word that starts with the last letter of the previous word. Words
+  must be real, {MIN_WORD_LENGTH}+ letters, and not already played this game.
 
-  Each word scores a point per letter, plus a point for every second left on
-  the turn clock: {CLASSIC_CLOCK} seconds in classic mode, or {CHALLENGE_CLOCK} in challenge mode.
-  Once the clock runs out, you lose a point for every second over.
+  Score a point per letter, plus a point per second left on the clock
+  ({CLASSIC_CLOCK}s, or {CHALLENGE_CLOCK}s in challenge mode). Run out of time and you lose points.
 
-  Reach {DEFAULT_TARGET_SCORE} points to win. Once someone does, the round is played out so
-  everyone gets the same number of turns, and the highest score wins. A tie
-  for the lead plays another round.
+  Reaching {TARGET} points ({CHALLENGE_TARGET} in challenge mode) ends the game once
+  everyone has had the same number of turns. Highest score wins.
 
 Challenge mode
 
-  Every word must also meet a challenge, which changes every turn, like
-  "end with S" or "no letter E". Vowels are A, E, I, O, and U; Y counts as a
-  consonant.
-
-  Each game also has a bonus challenge that lasts the whole game. Words that
-  meet it as well have their points multiplied, by up to 3x.
+  Every word must also meet a challenge that changes each turn, like "end
+  with S". Words that also meet the game's bonus challenge score extra.
+  Vowels are A, E, I, O, and U.
 
 Players
 
-  Play alone against the computer (easy, medium, hard, or impossible), or
-  with up to {MAX_PLAYERS} people sharing one keyboard.
-
-Stats
-
-  Your record, high scores, and favorite words are saved in stats.json in
-  the game's own folder. Games with a custom --target-score or --turn-time
-  don't count toward them.
+  Play the computer, or up to {MAX_PLAYERS} people on one keyboard. Ctrl+C quits.
 """
 
 T = TypeVar("T")
@@ -88,14 +76,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog=program_name(),
         description="Play Shiritori, the word-chain game, in your terminal.",
-        epilog=f"New to Shiritori? Run '{program_name()} --rules' to learn how to play.",
+        epilog=f"How to play: {program_name()} --rules",
     )
     parser.add_argument(
         "--target-score",
         type=_positive_int,
-        default=DEFAULT_TARGET_SCORE,
         metavar="POINTS",
-        help="points needed to win (default: %(default)s)",
+        help=(
+            f"points needed to win (default: {Game.default_target_score}, "
+            f"or {ChallengeGame.default_target_score} in challenge mode)"
+        ),
     )
     parser.add_argument(
         "--turn-time",
@@ -200,8 +190,7 @@ def scoreboard(players: Sequence[Player]) -> str:
 
 def show_bonus(game: ChallengeGame, sleep: Callable[[float], None], seconds: int = 5) -> None:
     """Announce the game's bonus challenge, and give players a moment to read it."""
-    print(f"\n  BONUS CHALLENGE: {game.bonus.text}")
-    print(f"  Words that also do this score x{game.multiplier:g} points!\n")
+    print(f"\n  BONUS x{game.multiplier:g}: {game.bonus.text}\n")
     for left in range(seconds, 0, -1):
         print(f"\r  Starting in {left}...", end="", flush=True)
         sleep(1)
@@ -229,14 +218,14 @@ def play(
             if isinstance(game, ChallengeGame):
                 print(
                     f"  Challenge: {game.challenge.text}"
-                    f"   [x{game.multiplier:g} bonus: {game.bonus.text}]"
+                    f"   (bonus x{game.multiplier:g}: {game.bonus.text})"
                 )
 
             if isinstance(player, ComputerPlayer):
                 word = choose_word(game, player.difficulty, rng)
                 if word is None:
                     game.skip()
-                    print(f"{player.name} is stumped! The new letter is {game.letter}.")
+                    print(f"{player.name} is stumped! New letter: {game.letter}")
                     continue
                 thinking = thinking_time(game, player.difficulty, word, rng)
                 with TurnPrompt(label, game.turn_time) as prompt:
@@ -249,17 +238,14 @@ def play(
 
             points = game.play(word, seconds)
             bonus = game.moves[-1].multiplier
-            print(f"{label}: {word}  {points:+d}" + (f"  (x{bonus:g} bonus!)" if bonus > 1 else ""))
+            print(f"{label}: {word}  {points:+d}" + (f"  (x{bonus:g} bonus)" if bonus > 1 else ""))
             print(f"    {scoreboard(game.players)}")
 
             if game.final_round and game.winner is None:
                 if game.round_complete:
-                    print("It's a tie for the lead! Playing another round.")
+                    print("Tied! One more round.")
                 elif not announced:
-                    print(
-                        f"{player.name} reached {game.target_score}! The round will be "
-                        "played out so everyone gets the same number of turns."
-                    )
+                    print(f"{player.name} reached {game.target_score}! Last round.")
                     announced = True
     return winner
 
@@ -267,34 +253,28 @@ def play(
 def record_stats(game: Game, path: Path) -> None:
     """Add a finished game to the saved stats, and announce anything new."""
     if not counts_toward_stats(game):
-        print("Games with custom rules don't count toward your stats.")
+        print("Custom rules, so this game isn't in your stats.")
         return
     try:
         stats = Stats.load(path)
         report = stats.record_game(game, date.today())
         stats.save(path)
     except StatsError as error:
-        print(f"Your stats weren't updated. {error}")
+        print(f"Stats not saved. {error}")
         return
 
     if report.high_score_ranks:
         rank = report.high_score_ranks[0]
         best = stats.high_scores[game.mode][rank - 1]
-        print(
-            f"New {game.mode} high score #{rank}: "
-            f"{best.player} scored {best.points} with {best.word!r}!"
-        )
+        print(f"New high score #{rank}: {best.word} ({best.points})")
     if report.longest_word:
         word = report.longest_word
-        print(f"New longest word: {word!r} ({len(word)} letters)!")
+        print(f"New longest word: {word}")
     for player in game.players:
         if isinstance(player, ComputerPlayer):
             record = stats.records[game.mode][player.difficulty.name]
-            print(
-                f"Your {game.mode} record against {player.difficulty.name}: "
-                f"{record.won} won, {record.lost} lost."
-            )
-    print(f"See all your stats with: {program_name()} --stats")
+            print(f"Record vs {player.difficulty.name}: {record.won} won, {record.lost} lost")
+    print(f"All stats: {program_name()} --stats")
 
 
 def show_stats(path: Path) -> int:
@@ -355,7 +335,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     print(BANNER)
-    print(f"  New here? Run '{program_name()} --rules' to learn how to play.\n")
+    print(f"  How to play: {program_name()} --rules\n")
     try:
         game_type = ask_game_type()
         players = ask_players()

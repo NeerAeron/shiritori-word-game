@@ -110,14 +110,13 @@ For example, playing `elephant` (8 letters) with 6 seconds left scores
 
 ### Winning
 
-The game ends when someone reaches the target score (100 by default), but
-not right away: the rest of that round is still played, so everyone gets the
-same number of turns. Then the highest score wins. If the lead is tied, the
-game plays another round.
+The game ends when someone reaches the target score: 100 points, or 150 in
+challenge mode. The rest of that round is still played, so everyone gets the
+same number of turns, and then the highest score wins. A tie for the lead
+plays one more round.
 
-This matters because a race to 100 heavily favors whoever goes first. In
-simulations of evenly matched people, the first player won about 66% of
-two-player games under first-to-100 rules. With equal turns it's 50%.
+Without that last round, whoever goes first wins about two games in three
+between evenly matched players. With it, it's an even split.
 
 ## Challenge mode
 
@@ -152,10 +151,10 @@ bonus challenges, each equally likely. A word that meets the turn's
 challenge *and* the bonus challenge has its points multiplied:
 
 ```text
-  Challenge: include Y   [x2.3 bonus: U is the only vowel]
-Neer (D): dusty  +51  (x2.3 bonus!)
+  Challenge: include Y   (bonus x2.3: U is the only vowel)
+Neer (D): dusty  +51  (x2.3 bonus)
     Neer: 51 | Computer: 0
-  Challenge: no letter N   [x2.3 bonus: U is the only vowel]
+  Challenge: no letter N   (bonus x2.3: U is the only vowel)
 Computer (Y): yogurt  +19
     Neer: 51 | Computer: 19
 ```
@@ -165,9 +164,8 @@ randomness so no two games are quite the same. Multipliers around 2x are the
 most common, smaller ones are slightly rarer, and 3x ones are the rarest.
 A bonus multiplies points but never makes a late answer's penalty worse.
 
-The clock is 20 seconds in challenge mode, to give you time to think. Before
-the first turn, the game shows the bonus challenge and counts down from 5 so
-everyone can read it.
+Challenge mode has a 20-second clock and plays to 150 points. Before the
+first turn, the game shows the bonus challenge and counts down from 5.
 
 ## Computer difficulty
 
@@ -180,10 +178,10 @@ seconds to think of a word in classic mode and 8 in challenge mode:
 
 | Difficulty | Word length | Typical player wins (classic / challenge) |
 | ---------- | ----------- | ----------------------------------------- |
-| easy       | 3–6 letters | about 89% / 81%                           |
-| medium     | 4–8         | about 69% / 61%                           |
-| hard       | 5–10        | about 34% / 28%                           |
-| impossible | 7–12        | about 6% / 2%                             |
+| easy       | 3–6 letters | about 84% / 85%                           |
+| medium     | 4–8         | about 60% / 61%                           |
+| hard       | 5–10        | about 24% / 23%                           |
+| impossible | 7–12        | about 3% / 1%                             |
 
 ## Stats
 
@@ -241,15 +239,15 @@ python play.py [--target-score POINTS] [--turn-time SECONDS] [--rules | --stats 
 
 If you installed the game, use `shiritori` in place of `python play.py`.
 
-| Option                  | Default                     | Description                      |
-| ----------------------- | --------------------------- | -------------------------------- |
-| `--target-score POINTS` | 100                         | Points needed to win             |
-| `--turn-time SECONDS`   | 10, or 20 in challenge mode | Seconds on the clock each turn   |
-| `--rules`               |                             | Explain how to play              |
-| `--stats`               |                             | Show your records and stats      |
-| `--reset-stats`         |                             | Erase your stats (asks first)    |
-| `--version`             |                             | Show the version and exit        |
-| `-h`, `--help`          |                             | Show the options                 |
+| Option                  | Default                       | Description                    |
+| ----------------------- | ----------------------------- | ------------------------------ |
+| `--target-score POINTS` | 100, or 150 in challenge mode | Points needed to win           |
+| `--turn-time SECONDS`   | 10, or 20 in challenge mode   | Seconds on the clock each turn |
+| `--rules`               |                               | Explain how to play            |
+| `--stats`               |                               | Show your records and stats    |
+| `--reset-stats`         |                               | Erase your stats (asks first)  |
+| `--version`             |                               | Show the version and exit      |
+| `-h`, `--help`          |                               | Show the options               |
 
 For a quick game, try `python play.py --target-score 50`. For a more relaxed
 one, try `python play.py --turn-time 30`. Neither counts toward your stats.
