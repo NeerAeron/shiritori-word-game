@@ -52,7 +52,9 @@ class FakeKeyboard:
 def instant_computer(monkeypatch):
     """Make the computer type instantly."""
     monkeypatch.setattr(cli, "thinking_time", lambda game, difficulty, word, rng: 0.0)
-    monkeypatch.setattr(cli, "typing_delays", lambda word, rng, thinking: [0.0] * (len(word) + 1))
+    monkeypatch.setattr(
+        cli, "typing_delays", lambda word, rng, thinking, letter_time: [0.0] * (len(word) + 1)
+    )
 
 
 def test_parse_args_defaults():
@@ -154,13 +156,12 @@ def test_computers_play_until_someone_wins(instant_computer, capsys, game_type):
     players = [ComputerPlayer("Hal"), ComputerPlayer("Eve", difficulty=DIFFICULTIES["hard"])]
     game = game_type(players, WordList.default(), target_score=60, rng=random.Random(1))
 
-    winner = cli.play(game, random.Random(2), FakeKeyboard())
+    winner = cli.play(game, random.Random(2), FakeKeyboard(), sleep=lambda seconds: None)
 
     assert winner.score >= 60
     assert winner.score == max(player.score for player in players)
     assert game.round_complete  # both players had the same number of turns
     output = capsys.readouterr().out
-    assert "Reach 60 points to win." in output
     assert f"Hal: {players[0].score} | Eve: {players[1].score}" in output
     assert ("Challenge:" in output) == (game_type is ChallengeGame)
 
@@ -208,12 +209,13 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     game.letter = "A"
     game.bonus, game.multiplier = Challenge("include G", lambda word: "g" in word), 2.0
 
-    winner = cli.play(game, keyboard=keyboard)
+    winner = cli.play(game, keyboard=keyboard, sleep=lambda seconds: None)
 
     assert winner.name == "Bob"  # 74 to 73, thanks to his last turn
     output = capsys.readouterr().out
-    assert "Challenge mode: every word must also meet a challenge" in output
-    assert "Bonus challenge for this game: include G." in output
+    assert "BONUS CHALLENGE: include G" in output
+    assert "Words that also do this score x2 points!" in output
+    assert "Starting in 1..." in output
     assert "  Challenge: end with E   [x2 bonus: include G]" in output
     assert "ant  (doesn't meet the challenge)" in output
     assert "Ann (A): apple  +25\n" in output  # 5 letters + 20 seconds
@@ -377,3 +379,32 @@ def test_challenges_follow_the_computers_difficulty():
     people = [Player("Ann"), Player("Bob")]
     assert cli.new_game(ChallengeGame, people, args).difficulty == "hard"
     assert type(cli.new_game(Game, people, args)) is Game
+
+
+def test_rules_flag_explains_how_to_play(capsys):
+    assert cli.main(["--rules"]) == 0
+    output = capsys.readouterr().out
+    assert "How to play Shiritori" in output
+    assert "Challenge mode" in output
+    assert "up to 4 people" in output
+
+
+def test_instructions_only_show_when_asked_for(capsys):
+    game = Game([Player("Ann"), Player("Bob")], WordList(["apple", "egg"]), target_score=10)
+    game.letter = "A"
+    cli.play(game, keyboard=FakeKeyboard("apple\negg\n"))
+    output = capsys.readouterr().out
+    assert "How to play" not in output
+    assert "points to win" not in output
+
+
+def test_challenge_mode_shows_the_bonus_then_counts_down(capsys):
+    game = ChallengeGame([Player("Ann"), Player("Bob")], WordList.default(), rng=random.Random(0))
+    pauses = []
+    cli.show_bonus(game, sleep=pauses.append)
+    output = capsys.readouterr().out
+    assert f"BONUS CHALLENGE: {game.bonus.text}" in output
+    assert [line for line in output.split("\r") if "Starting in" in line] == [
+        f"  Starting in {n}..." for n in (5, 4, 3, 2, 1)
+    ]
+    assert pauses == [1] * 5

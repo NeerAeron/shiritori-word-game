@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import random
 import sys
-import textwrap
+import time
 from collections.abc import Callable, Sequence
 from datetime import date
 from pathlib import Path
@@ -31,27 +31,44 @@ MAX_NAME_LENGTH = 20
 COMPUTER_NAME = "Computer"
 GAME_TYPES: dict[str, type[Game]] = {"classic": Game, "challenge": ChallengeGame}
 
-RULES = f"""\
-how to play:
+CLASSIC_CLOCK = Game.default_turn_time
+CHALLENGE_CLOCK = ChallengeGame.default_turn_time
+
+HOW_TO_PLAY = f"""\
+How to play Shiritori
+
   Take turns naming a word that starts with the last letter of the previous
   word. Words must be in the dictionary, at least {MIN_WORD_LENGTH} letters long, and can
-  only be played once per game.
+  only be played once per game. Type a word and press Enter; Backspace fixes
+  mistakes, and Ctrl+C quits.
 
-  Each word scores one point per letter plus a time bonus: the seconds left
-  on the turn clock. Once the clock runs out, the bonus becomes a penalty.
-  When someone reaches the target score, the round is played out so everyone
-  gets the same number of turns, and the highest score wins.
+  Each word scores a point per letter, plus a point for every second left on
+  the turn clock: {CLASSIC_CLOCK} seconds in classic mode, or {CHALLENGE_CLOCK} in challenge mode.
+  Once the clock runs out, you lose a point for every second over.
 
-  In challenge mode, every word must also meet a challenge that changes each
-  turn, like "end with S" or "no letter E". Words that also meet the game's
-  bonus challenge have their points multiplied.
+  Reach {DEFAULT_TARGET_SCORE} points to win. Once someone does, the round is played out so
+  everyone gets the same number of turns, and the highest score wins. A tie
+  for the lead plays another round.
+
+Challenge mode
+
+  Every word must also meet a challenge, which changes every turn, like
+  "end with S" or "no letter E". Vowels are A, E, I, O, and U; Y counts as a
+  consonant.
+
+  Each game also has a bonus challenge that lasts the whole game. Words that
+  meet it as well have their points multiplied, by up to 3x.
+
+Players
+
+  Play alone against the computer (easy, medium, hard, or impossible), or
+  with up to {MAX_PLAYERS} people sharing one keyboard.
+
+Stats
 
   Your record, high scores, and favorite words are saved in stats.json in
   the game's own folder. Games with a custom --target-score or --turn-time
   don't count toward them.
-
-  Play alone against the computer, or with up to {MAX_PLAYERS} people sharing one
-  keyboard. Press Ctrl+C at any time to quit.
 """
 
 T = TypeVar("T")
@@ -71,8 +88,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog=program_name(),
         description="Play Shiritori, the word-chain game, in your terminal.",
-        epilog=RULES,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=f"New to Shiritori? Run '{program_name()} --rules' to learn how to play.",
     )
     parser.add_argument(
         "--target-score",
@@ -91,6 +107,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     stats = parser.add_mutually_exclusive_group()
+    stats.add_argument("--rules", action="store_true", help="explain how to play, then exit")
     stats.add_argument(
         "--stats", action="store_true", help="show your records, high scores, and word stats"
     )
@@ -181,34 +198,30 @@ def scoreboard(players: Sequence[Player]) -> str:
     return " | ".join(f"{player.name}: {player.score}" for player in players)
 
 
-def intro(game: Game) -> str:
-    """Explain the rules that matter for this game."""
-    rules = (
-        f"Reach {game.target_score} points to win. Words score a point per letter, "
-        f"plus a point for every second left on the {game.turn_time}-second clock "
-        "(or minus one for every second over). Once someone reaches "
-        f"{game.target_score}, the round is played out so everyone gets the same "
-        "number of turns, and the highest score wins."
-    )
-    if not isinstance(game, ChallengeGame):
-        return textwrap.fill(rules, 72)
-    challenge = (
-        "Challenge mode: every word must also meet a challenge, which changes every "
-        "turn. Vowels are A, E, I, O, and U."
-    )
-    bonus = (
-        f"Bonus challenge for this game: {game.bonus.text}. Words that do this too "
-        f"score x{game.multiplier:g}!"
-    )
-    return "\n\n".join(textwrap.fill(text, 72) for text in (challenge, rules, bonus))
+def show_bonus(game: ChallengeGame, sleep: Callable[[float], None], seconds: int = 5) -> None:
+    """Announce the game's bonus challenge, and give players a moment to read it."""
+    print(f"\n  BONUS CHALLENGE: {game.bonus.text}")
+    print(f"  Words that also do this score x{game.multiplier:g} points!\n")
+    for left in range(seconds, 0, -1):
+        print(f"\r  Starting in {left}...", end="", flush=True)
+        sleep(1)
+    print("\r" + " " * 24 + "\r", end="", flush=True)
 
 
-def play(game: Game, rng: random.Random | None = None, keyboard: Keyboard | None = None) -> Player:
+def play(
+    game: Game,
+    rng: random.Random | None = None,
+    keyboard: Keyboard | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+) -> Player:
     """Run turns until the game has a winner, and return them."""
     rng = rng or random.Random()
     keyboard = keyboard or Keyboard()
     announced = False
-    print(f"\n{intro(game)}\n")
+    if isinstance(game, ChallengeGame):
+        show_bonus(game, sleep)
+    else:
+        print()
     with keyboard:
         while (winner := game.winner) is None:
             player = game.current_player
@@ -227,7 +240,8 @@ def play(game: Game, rng: random.Random | None = None, keyboard: Keyboard | None
                     continue
                 thinking = thinking_time(game, player.difficulty, word, rng)
                 with TurnPrompt(label, game.turn_time) as prompt:
-                    seconds = prompt.type_word(word, typing_delays(word, rng, thinking))
+                    delays = typing_delays(word, rng, thinking, player.difficulty.typing)
+                    seconds = prompt.type_word(word, delays)
             else:
                 keyboard.discard_pending()
                 with TurnPrompt(label, game.turn_time) as prompt:
@@ -329,6 +343,9 @@ def new_game(game_type: type[Game], players: list[Player], args: argparse.Namesp
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     path = stats_file()
+    if args.rules:
+        print(HOW_TO_PLAY)
+        return 0
     if args.stats:
         return show_stats(path)
     if args.reset_stats:
@@ -338,6 +355,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     print(BANNER)
+    print(f"  New here? Run '{program_name()} --rules' to learn how to play.\n")
     try:
         game_type = ask_game_type()
         players = ask_players()

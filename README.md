@@ -8,11 +8,6 @@ terminal. You race a countdown clock against a computer opponent or against
 friends on the same keyboard.
 
 ```text
-Reach 100 points to win. Words score a point per letter, plus a point
-for every second left on the 10-second clock (or minus one for every
-second over). Once someone reaches 100, the round is played out so
-everyone gets the same number of turns, and the highest score wins.
-
 Neer (T): tiger  +13
     Neer: 13 | Computer: 0
 Computer (R): rhubarb  +16
@@ -91,6 +86,9 @@ must start with:
 Type a word and press **Enter**. Use **Backspace** to correct mistakes and
 **Ctrl+C** to quit at any time.
 
+The game doesn't repeat the instructions every time. To read them in the
+terminal, run `python play.py --rules` (or `shiritori --rules`).
+
 ### Rules
 
 - The first word starts with a random letter. After that, every word starts
@@ -167,20 +165,25 @@ randomness so no two games are quite the same. Multipliers around 2x are the
 most common, smaller ones are slightly rarer, and 3x ones are the rarest.
 A bonus multiplies points but never makes a late answer's penalty worse.
 
-The clock is 20 seconds in challenge mode, to give you time to think.
+The clock is 20 seconds in challenge mode, to give you time to think. Before
+the first turn, the game shows the bonus challenge and counts down from 5 so
+everyone can read it.
 
 ## Computer difficulty
 
-The computer plays real words from the same dictionary. Harder levels play
-longer words, which earn more points. In challenge mode, harder levels also
-think faster and go for the bonus challenge more often.
+The computer plays real words from the same dictionary, and takes time to
+think and type like a person does. Harder levels play longer words, think and
+type faster, and in challenge mode go for the bonus challenge more often.
 
-| Difficulty | Word length | Goes for the bonus (challenge mode) |
-| ---------- | ----------- | ----------------------------------- |
-| easy       | 3–6 letters | 10% of turns                        |
-| medium     | 6–11        | 25%                                 |
-| hard       | 8 or more   | 40%                                 |
-| impossible | 13 or more  | 60%                                 |
+The levels are tuned against a simulated typical player, who takes about 4
+seconds to think of a word in classic mode and 8 in challenge mode:
+
+| Difficulty | Word length | Typical player wins (classic / challenge) |
+| ---------- | ----------- | ----------------------------------------- |
+| easy       | 3–6 letters | about 89% / 81%                           |
+| medium     | 4–8         | about 69% / 61%                           |
+| hard       | 5–10        | about 34% / 28%                           |
+| impossible | 7–12        | about 6% / 2%                             |
 
 ## Stats
 
@@ -233,7 +236,7 @@ neither are games you quit with Ctrl+C.
 ## Options
 
 ```text
-python play.py [--target-score POINTS] [--turn-time SECONDS] [--stats | --reset-stats]
+python play.py [--target-score POINTS] [--turn-time SECONDS] [--rules | --stats | --reset-stats]
 ```
 
 If you installed the game, use `shiritori` in place of `python play.py`.
@@ -242,10 +245,11 @@ If you installed the game, use `shiritori` in place of `python play.py`.
 | ----------------------- | --------------------------- | -------------------------------- |
 | `--target-score POINTS` | 100                         | Points needed to win             |
 | `--turn-time SECONDS`   | 10, or 20 in challenge mode | Seconds on the clock each turn   |
+| `--rules`               |                             | Explain how to play              |
 | `--stats`               |                             | Show your records and stats      |
 | `--reset-stats`         |                             | Erase your stats (asks first)    |
 | `--version`             |                             | Show the version and exit        |
-| `-h`, `--help`          |                             | Show help and a summary of rules |
+| `-h`, `--help`          |                             | Show the options                 |
 
 For a quick game, try `python play.py --target-score 50`. For a more relaxed
 one, try `python play.py --turn-time 30`. Neither counts toward your stats.

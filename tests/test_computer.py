@@ -1,11 +1,11 @@
 import random
+from dataclasses import replace
 
 import pytest
 
 from shiritori.challenges import ANY_WORD, Challenge, ChallengeGame
 from shiritori.computer import (
     DIFFICULTIES,
-    Difficulty,
     choose_word,
     thinking_time,
     typing_delays,
@@ -14,6 +14,11 @@ from shiritori.game import Game, Player
 from shiritori.words import WordList
 
 WORDS = WordList.default()
+
+
+def custom_difficulty(**changes):
+    settings = {"name": "test", "min_length": 3, "max_length": 9, "mean_length": 5, "stdev": 1}
+    return replace(DIFFICULTIES["medium"], **(settings | changes))
 
 
 def make_game(letter, words=WORDS):
@@ -62,9 +67,7 @@ def test_returns_none_when_stumped():
 
 def test_same_seed_same_word():
     game = make_game("M")
-    difficulty = Difficulty(
-        "test", 5, 9, mean_length=7, stdev=1, bonus_chance=0, challenge_thinking=3
-    )
+    difficulty = custom_difficulty(min_length=5, max_length=9, mean_length=7)
     first = choose_word(game, difficulty, random.Random(42))
     assert choose_word(game, difficulty, random.Random(42)) == first
 
@@ -87,8 +90,8 @@ def challenge_game(letter, words, bonus_test):
 
 def test_goes_for_the_bonus_as_often_as_its_difficulty_says():
     game = challenge_game("A", WordList(["apple", "axe", "avocado"]), lambda word: "x" in word)
-    always = Difficulty("test", 3, 9, 5, 1, bonus_chance=1, challenge_thinking=3)
-    never = Difficulty("test", 3, 9, 5, 1, bonus_chance=0, challenge_thinking=3)
+    always = custom_difficulty(bonus_chance=1)
+    never = custom_difficulty(bonus_chance=0)
     rng = random.Random(0)
 
     assert {choose_word(game, always, rng) for _ in range(20)} == {"axe"}
@@ -97,7 +100,7 @@ def test_goes_for_the_bonus_as_often_as_its_difficulty_says():
 
 def test_plays_any_word_when_the_bonus_is_out_of_reach():
     game = challenge_game("A", WordList(["apple"]), lambda word: "z" in word)
-    always = Difficulty("test", 3, 9, 5, 1, bonus_chance=1, challenge_thinking=3)
+    always = custom_difficulty(bonus_chance=1)
     assert choose_word(game, always, random.Random(0)) == "apple"
 
 
@@ -109,15 +112,35 @@ def test_thinks_longer_in_challenge_mode_and_longest_for_the_bonus():
 
     def average(game, word):
         rng = random.Random(0)
-        return sum(thinking_time(game, medium, word, rng) for _ in range(200)) / 200
+        return sum(thinking_time(game, medium, word, rng) for _ in range(400)) / 400
 
-    assert average(classic, "apple") == pytest.approx(0.9, abs=0.1)
+    assert average(classic, "apple") == pytest.approx(medium.thinking, rel=0.1)
     assert average(challenge, "apple") == pytest.approx(medium.challenge_thinking, rel=0.1)
-    assert average(challenge, "axe") == pytest.approx(medium.challenge_thinking + 2.5, rel=0.1)
+    assert average(challenge, "axe") == pytest.approx(medium.challenge_thinking + 3, rel=0.1)
 
 
-def test_easier_computers_think_slower_in_challenge_mode():
-    thinking = [difficulty.challenge_thinking for difficulty in DIFFICULTIES.values()]
-    assert thinking == sorted(thinking, reverse=True)
-    chances = [difficulty.bonus_chance for difficulty in DIFFICULTIES.values()]
+def test_thinking_time_varies_like_a_persons():
+    game = make_game("A")
+    rng = random.Random(0)
+    times = [thinking_time(game, DIFFICULTIES["medium"], "apple", rng) for _ in range(400)]
+    assert min(times) < 0.7 * DIFFICULTIES["medium"].thinking
+    assert max(times) > 1.5 * DIFFICULTIES["medium"].thinking
+
+
+def test_typing_speed_sets_the_pause_between_letters():
+    rng = random.Random(0)
+    slow = typing_delays("abcdefghij" * 10, rng, thinking=0, letter_time=0.3)
+    fast = typing_delays("abcdefghij" * 10, rng, thinking=0, letter_time=0.1)
+    assert sum(slow[:-1]) / 100 == pytest.approx(0.3, rel=0.15)
+    assert sum(fast[:-1]) / 100 == pytest.approx(0.1, rel=0.15)
+
+
+@pytest.mark.parametrize(("clock", "thinking"), [(10, "thinking"), (20, "challenge_thinking")])
+def test_harder_computers_score_more_per_turn(clock, thinking):
+    def expected_points(d):
+        return d.mean_length + clock - getattr(d, thinking) - d.mean_length * d.typing
+
+    points = [expected_points(d) for d in DIFFICULTIES.values()]
+    assert points == sorted(points)
+    chances = [d.bonus_chance for d in DIFFICULTIES.values()]
     assert chances == sorted(chances)
