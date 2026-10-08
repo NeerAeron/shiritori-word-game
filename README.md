@@ -21,7 +21,7 @@ Neer (B): banana  +14
 
 - **Two modes:** classic Shiritori, and challenge mode, where every word must
   also meet a spelling challenge and a bonus challenge multiplies your points.
-- **Solo or together:** play the computer at four difficulty levels, or with
+- **Solo or together:** play the computer at five difficulty levels, or with
   up to 4 people taking turns at one keyboard.
 - **Fair turns:** everyone always gets the same number of turns, so going
   first is no advantage.
@@ -140,6 +140,7 @@ easy end; impossible is centered. Games between people use the hard mix.
 
 | Difficulty | Bell curve           | Easy | Medium | Hard |
 | ---------- | -------------------- | ---: | -----: | ---: |
+| beginner   | almost always easy   |  83% |    16% |   0% |
 | easy       | heavily toward easy  |  73% |    26% |   1% |
 | medium     | toward easy          |  49% |    46% |   4% |
 | hard       | slightly toward easy |  31% |    58% |  10% |
@@ -170,18 +171,21 @@ first turn, the game shows the bonus challenge and counts down from 5.
 ## Computer difficulty
 
 The computer plays real words from the same dictionary, and takes time to
-think and type like a person does. Harder levels play longer words, think and
-type faster, and in challenge mode go for the bonus challenge more often.
+think and type like a person does. Harder levels play longer words, type
+faster, and in challenge mode go for the bonus challenge more often.
 
-The levels are tuned against a simulated typical player, who takes about 4
-seconds to think of a word in classic mode and 8 in challenge mode:
+The levels are tuned in simulations against two kinds of player. Beginner is
+an even match for an intermediate player. The rest are tuned against an
+experienced player who thinks of a word in about 2 seconds (5 in challenge
+mode), types quickly, and plays 5 to 11 letter words:
 
-| Difficulty | Word length | Typical player wins (classic / challenge) |
-| ---------- | ----------- | ----------------------------------------- |
-| easy       | 3–6 letters | about 84% / 85%                           |
-| medium     | 4–8         | about 60% / 61%                           |
-| hard       | 5–10        | about 24% / 23%                           |
-| impossible | 7–12        | about 3% / 1%                             |
+| Difficulty | Word length  | Player wins (classic / challenge)   |
+| ---------- | ------------ | ----------------------------------- |
+| beginner   | 3–6 letters  | intermediate: about 50% / 50%       |
+| easy       | 5–9          | experienced: about 90% / 85%        |
+| medium     | 7–11         | experienced: about 60% / 50%        |
+| hard       | 9–15         | experienced: about 30% / 20%        |
+| impossible | 10–16        | experienced: about 5% / 2%          |
 
 ## Stats
 
