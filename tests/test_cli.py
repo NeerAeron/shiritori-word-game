@@ -3,7 +3,7 @@ import random
 import pytest
 
 from shiritori import __version__, cli
-from shiritori.challenges import Challenge, ChallengeGame
+from shiritori.challenges import NO_ROUND_BONUS, Challenge, ChallengeGame, RoundBonus
 from shiritori.computer import DIFFICULTIES, ComputerPlayer
 from shiritori.game import Game, Move, Player
 from shiritori.stats import HighScore, Record, Stats
@@ -180,7 +180,7 @@ def test_play_with_people_at_the_keyboard(capsys):
     assert keyboard.discarded == 4  # before each person's turn
     output = capsys.readouterr().out
     assert "xyz  (must start with A)" in output
-    assert "Ann (A): apple  +15  (5 + 10s)" in output
+    assert "Ann (A): apple  +15  (5L + 10s)" in output
     assert "Bob (E): egg  +13" in output
     assert "Ann (G): giraffe  +17" in output
     assert "Ann reached 30! Last round." in output
@@ -203,7 +203,9 @@ def test_a_tie_for_the_lead_plays_another_round(capsys):
 
 def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     end_with_e = Challenge("end with E", lambda word: word.endswith("e"))
+    per_l = RoundBonus("+3 per L", lambda word: 3 * word.count("l"))
     monkeypatch.setattr(ChallengeGame, "_pick_challenge", lambda self: end_with_e)
+    monkeypatch.setattr(ChallengeGame, "_pick_round_bonus", lambda self: per_l)
     keyboard = FakeKeyboard("ant\n\x7f\x7f\x7fapple\neagle\nedge\nelse\n")
     words = WordList(["ant", "apple", "eagle", "edge", "else"])
     game = ChallengeGame([Player("Ann"), Player("Bob")], words, target_score=60)
@@ -212,16 +214,16 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
 
     winner = cli.play(game, keyboard=keyboard, sleep=lambda seconds: None)
 
-    assert winner.name == "Bob"  # 74 to 73, thanks to his last turn
+    assert winner.name == "Bob"  # 83 to 76, thanks to his last turn
     output = capsys.readouterr().out
-    assert "BONUS x2: include G" in output
+    assert "GAME BONUS x2: include G" in output
     assert "Starting in 1..." in output
-    assert "  Challenge: end with E   (bonus x2: include G)" in output
+    assert "  Challenge: end with E | +3 per L | x2: include G" in output
     assert "ant  (doesn't meet the challenge)" in output
-    assert "Ann (A): apple  +25  (5 + 20s)\n" in output
-    assert "Bob (E): eagle  +50  (5 + 20s, x2 bonus)" in output
-    assert "Ann (E): edge  +48  (4 + 20s, x2 bonus)" in output
-    assert "Bob (E): else  +24  (4 + 20s)\n" in output
+    assert "Ann (A): apple  +28  (5L + 3B + 20s)\n" in output
+    assert "Bob (E): eagle  +56  (5L + 3B + 20s) x2" in output
+    assert "Ann (E): edge  +48  (4L + 20s) x2" in output
+    assert "Bob (E): else  +27  (4L + 3B + 20s)\n" in output
 
 
 def test_main_needs_a_terminal(monkeypatch, capsys):
@@ -269,6 +271,7 @@ def finished_game_vs_computer(game_type=Game, **rules):
         game.letter = word[0].upper()
         if isinstance(game, ChallengeGame):
             game.challenge = Challenge("any", lambda word: True)
+            game.round_bonus = NO_ROUND_BONUS
             game.multiplier = 1.0
         game.play(word, seconds=0)
     game.skip()  # the computer passes, finishing the round
@@ -388,7 +391,7 @@ def test_rules_flag_explains_how_to_play(capsys):
     assert "How to play" in output
     assert "Challenge mode" in output
     assert "up to 4 people" in output
-    assert "150 in challenge mode" in output
+    assert "200 in challenge mode" in output
 
 
 def test_instructions_only_show_when_asked_for(capsys):
@@ -405,7 +408,7 @@ def test_challenge_mode_shows_the_bonus_then_counts_down(capsys):
     pauses = []
     cli.show_bonus(game, sleep=pauses.append)
     output = capsys.readouterr().out
-    assert f"BONUS x{game.multiplier:g}: {game.bonus.text}" in output
+    assert f"GAME BONUS x{game.multiplier:g}: {game.bonus.text}" in output
     assert [line for line in output.split("\r") if "Starting in" in line] == [
         f"  Starting in {n}..." for n in (5, 4, 3, 2, 1)
     ]
@@ -415,9 +418,10 @@ def test_challenge_mode_shows_the_bonus_then_counts_down(capsys):
 @pytest.mark.parametrize(
     ("move", "text"),
     [
-        (Move(Player("Neer"), "restitution", 17, time_bonus=6), "(11 + 6s)"),
-        (Move(Player("Neer"), "tiger", 2, time_bonus=-3), "(5 - 3s)"),
-        (Move(Player("Neer"), "dusty", 51, 2.3, time_bonus=17), "(5 + 17s, x2.3 bonus)"),
+        (Move(Player("Neer"), "restitution", 17, time_bonus=6), "(11L + 6s)"),
+        (Move(Player("Neer"), "tiger", 2, time_bonus=-3), "(5L - 3s)"),
+        (Move(Player("Neer"), "kiosks", 27, time_bonus=18, round_bonus=3), "(6L + 3B + 18s)"),
+        (Move(Player("Neer"), "dusty", 51, 2.3, 15, 2), "(5L + 2B + 15s) x2.3"),
     ],
 )
 def test_breakdown_shows_how_the_points_add_up(move, text):

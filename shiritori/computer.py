@@ -25,9 +25,10 @@ class Difficulty:
     takes to come up with a word in classic and challenge mode, and ``spread``
     is how much that varies from turn to turn: the higher it is, the more often
     a quick answer is followed by a long blank, like a newer player. ``typing``
-    is the seconds it takes per letter, and ``bonus_chance`` is how often it
-    goes for the bonus challenge in challenge mode. ``tactics`` is how strongly
-    it prefers words that end in a letter few words start with.
+    is the seconds it takes per letter. In challenge mode, ``bonus_chance`` is
+    how often it goes for the game bonus, and ``round_bonus_chance`` how often
+    it goes for a word that earns plenty of round bonus points. ``tactics`` is
+    how strongly it prefers words that end in a letter few words start with.
     """
 
     name: str
@@ -40,6 +41,7 @@ class Difficulty:
     spread: float
     typing: float
     bonus_chance: float
+    round_bonus_chance: float = 0
     tactics: float = 0  # How hard it tries to leave the next player an awkward letter
 
 
@@ -60,6 +62,7 @@ DIFFICULTIES = {
             spread=0.5,
             typing=0.3,
             bonus_chance=0.05,
+            round_bonus_chance=0.1,
         ),
         Difficulty(
             "easy",
@@ -72,6 +75,7 @@ DIFFICULTIES = {
             spread=0.8,
             typing=0.25,
             bonus_chance=0.05,
+            round_bonus_chance=0.2,
         ),
         Difficulty(
             "medium",
@@ -84,6 +88,7 @@ DIFFICULTIES = {
             spread=0.8,
             typing=0.22,
             bonus_chance=0.1,
+            round_bonus_chance=0.4,
             tactics=0.25,
         ),
         Difficulty(
@@ -97,6 +102,7 @@ DIFFICULTIES = {
             spread=0.5,
             typing=0.2,
             bonus_chance=0.2,
+            round_bonus_chance=0.6,
             tactics=0.6,
         ),
         Difficulty(
@@ -110,6 +116,7 @@ DIFFICULTIES = {
             spread=0.45,
             typing=0.17,
             bonus_chance=0.7,
+            round_bonus_chance=0.8,
             tactics=1.0,
         ),
     )
@@ -147,7 +154,8 @@ def choose_word(game: Game, difficulty: Difficulty, rng: random.Random) -> str |
     """Pick a word for the current turn, or return None if nothing can be played.
 
     Easy starting letters get longer words, awkward ones shorter words. Harder
-    computers also favor words that leave the next player an awkward letter.
+    computers go for bonuses more often, and favor words that leave the next
+    player an awkward letter.
     """
     playable = [
         word for word in game.words.starting_with(game.letter) if game.check_word(word) is None
@@ -160,6 +168,8 @@ def choose_word(game: Game, difficulty: Difficulty, rng: random.Random) -> str |
     shift = EASE_LENGTH * letter_ease(game.words, game.letter)
     low, high = difficulty.min_length + shift, difficulty.max_length + shift
     candidates = [word for word in playable if low <= len(word) <= high] or playable
+    if isinstance(game, ChallengeGame) and rng.random() < difficulty.round_bonus_chance:
+        candidates = most_round_points(game, candidates)
     target = rng.gauss(difficulty.mean_length + shift, difficulty.stdev)
     closest = min(abs(len(word) - target) for word in candidates)
     near = [word for word in candidates if abs(len(word) - target) <= closest + 1]
@@ -167,6 +177,13 @@ def choose_word(game: Game, difficulty: Difficulty, rng: random.Random) -> str |
         return rng.choice(near)
     weights = [math.exp(-difficulty.tactics * letter_ease(game.words, w[-1])) for w in near]
     return rng.choices(near, weights)[0]
+
+
+def most_round_points(game: Game, words: list[str]) -> list[str]:
+    """The words that earn the most round bonus points: about the top quarter of *words*."""
+    points = {word: game.round_points(word) for word in words}
+    goal = max(sorted(points.values())[len(points) * 3 // 4], 1)
+    return [word for word in words if points[word] >= goal] or words
 
 
 def thinking_time(game: Game, difficulty: Difficulty, word: str, rng: random.Random) -> float:

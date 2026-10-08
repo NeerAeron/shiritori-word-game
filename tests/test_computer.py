@@ -4,13 +4,14 @@ from dataclasses import replace
 
 import pytest
 
-from shiritori.challenges import ANY_WORD, Challenge, ChallengeGame
+from shiritori.challenges import ANY_WORD, NO_ROUND_BONUS, Challenge, ChallengeGame, RoundBonus
 from shiritori.computer import (
     DIFFICULTIES,
     EASE_LENGTH,
     EASE_THINKING,
     choose_word,
     letter_ease,
+    most_round_points,
     thinking_time,
     typing_delays,
 )
@@ -119,10 +120,11 @@ def test_typing_delays_cover_each_letter_and_enter():
     assert delays[0] >= 2.0  # includes time to think of the word
 
 
-def challenge_game(letter, words, bonus_test):
+def challenge_game(letter, words, bonus_test, round_bonus=NO_ROUND_BONUS):
     game = ChallengeGame([Player("Ann"), Player("Bob")], words, rng=random.Random(0))
     game.letter = letter
     game.challenge = ANY_WORD
+    game.round_bonus = round_bonus
     game.bonus = Challenge("test bonus", bonus_test)
     game.multiplier = 2.0
     return game
@@ -142,6 +144,28 @@ def test_plays_any_word_when_the_bonus_is_out_of_reach():
     game = challenge_game("A", WordList(["apple"]), lambda word: "z" in word)
     always = custom_difficulty(bonus_chance=1)
     assert choose_word(game, always, random.Random(0)) == "apple"
+
+
+def test_goes_for_round_bonus_points_as_often_as_its_difficulty_says():
+    per_z = RoundBonus("+5 per Z", lambda word: 5 * word.count("z"))
+    words = WordList(["amaze", "azalea", "apple", "arrow", "axle", "album", "angel"])
+    game = challenge_game("A", words, lambda word: False, per_z)
+    always = custom_difficulty(round_bonus_chance=1)
+    never = custom_difficulty(round_bonus_chance=0)
+    rng = random.Random(0)
+
+    assert {choose_word(game, always, rng) for _ in range(30)} == {"amaze", "azalea"}
+    assert len({choose_word(game, never, rng) for _ in range(100)}) >= 5
+
+
+def test_round_bonus_hunting_keeps_the_top_quarter():
+    per_e = RoundBonus("+1 per E", lambda word: word.count("e"))
+    words = ["excellence", "eerie", "exceed", "eel", "east", "echo", "elk", "ego"]
+    game = challenge_game("E", WordList(words), lambda word: False, per_e)
+    assert most_round_points(game, words) == ["excellence", "eerie", "exceed"]
+    assert most_round_points(game, ["echo", "elk"]) == ["echo", "elk"]  # all earn the same
+    game.round_bonus = NO_ROUND_BONUS
+    assert most_round_points(game, words) == words  # nothing to hunt for
 
 
 def test_thinks_longer_in_challenge_mode_and_longest_for_the_bonus():
@@ -185,5 +209,6 @@ def test_harder_computers_score_more_per_turn(clock, thinking):
 
     points = [expected_points(d) for d in DIFFICULTIES.values()]
     assert points == sorted(points)
-    chances = [d.bonus_chance for d in DIFFICULTIES.values()]
-    assert chances == sorted(chances)
+    for chance in ("bonus_chance", "round_bonus_chance"):
+        chances = [getattr(d, chance) for d in DIFFICULTIES.values()]
+        assert chances == sorted(chances)
