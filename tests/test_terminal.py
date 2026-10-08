@@ -206,7 +206,12 @@ def test_posix_keyboard_does_not_echo_and_restores_the_terminal(terminal):
         assert not termios.tcgetattr(device)[3] & termios.ECHO
         os.write(controller, b"z")
         assert keyboard.read_key() == "z"
-    assert termios.tcgetattr(device) == before
+    after = termios.tcgetattr(device)
+    # macOS may set PENDIN, a flag the kernel keeps for its own bookkeeping.
+    pendin = getattr(termios, "PENDIN", 0)
+    after[3] &= ~pendin
+    before[3] &= ~pendin
+    assert after == before
 
 
 @posix_only
