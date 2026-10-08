@@ -52,12 +52,14 @@ class FakeKeyboard:
 def instant_computer(monkeypatch):
     """Make the computer type instantly."""
     monkeypatch.setattr(cli, "thinking_time", lambda game, difficulty, word, rng: 0.0)
-    monkeypatch.setattr(cli, "typing_delays", lambda word, rng, thinking: [0.0] * (len(word) + 1))
+    monkeypatch.setattr(
+        cli, "typing_delays", lambda word, rng, thinking, letter_time: [0.0] * (len(word) + 1)
+    )
 
 
 def test_parse_args_defaults():
     args = cli.parse_args([])
-    assert args.target_score == 100
+    assert args.target_score is None  # each mode has its own default
     assert args.turn_time is None  # each mode has its own default
 
 
@@ -154,13 +156,12 @@ def test_computers_play_until_someone_wins(instant_computer, capsys, game_type):
     players = [ComputerPlayer("Hal"), ComputerPlayer("Eve", difficulty=DIFFICULTIES["hard"])]
     game = game_type(players, WordList.default(), target_score=60, rng=random.Random(1))
 
-    winner = cli.play(game, random.Random(2), FakeKeyboard())
+    winner = cli.play(game, random.Random(2), FakeKeyboard(), sleep=lambda seconds: None)
 
     assert winner.score >= 60
     assert winner.score == max(player.score for player in players)
     assert game.round_complete  # both players had the same number of turns
     output = capsys.readouterr().out
-    assert "Reach 60 points to win." in output
     assert f"Hal: {players[0].score} | Eve: {players[1].score}" in output
     assert ("Challenge:" in output) == (game_type is ChallengeGame)
 
@@ -181,7 +182,7 @@ def test_play_with_people_at_the_keyboard(capsys):
     assert "Ann (A): apple  +15" in output
     assert "Bob (E): egg  +13" in output
     assert "Ann (G): giraffe  +17" in output
-    assert "Ann reached 30! The round will be played out" in output
+    assert "Ann reached 30! Last round." in output
     assert "Bob (E): elephant  +18" in output  # Bob still gets his turn: 31 to Ann's 32
 
 
@@ -195,7 +196,7 @@ def test_a_tie_for_the_lead_plays_another_round(capsys):
 
     assert winner.name == "Bob"  # 32 all after two rounds, then 47 to 48
     output = capsys.readouterr().out
-    assert "It's a tie for the lead! Playing another round." in output
+    assert "Tied! One more round." in output
     assert "Bob (R): rabbit  +16" in output
 
 
@@ -208,17 +209,17 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     game.letter = "A"
     game.bonus, game.multiplier = Challenge("include G", lambda word: "g" in word), 2.0
 
-    winner = cli.play(game, keyboard=keyboard)
+    winner = cli.play(game, keyboard=keyboard, sleep=lambda seconds: None)
 
     assert winner.name == "Bob"  # 74 to 73, thanks to his last turn
     output = capsys.readouterr().out
-    assert "Challenge mode: every word must also meet a challenge" in output
-    assert "Bonus challenge for this game: include G." in output
-    assert "  Challenge: end with E   [x2 bonus: include G]" in output
+    assert "BONUS x2: include G" in output
+    assert "Starting in 1..." in output
+    assert "  Challenge: end with E   (bonus x2: include G)" in output
     assert "ant  (doesn't meet the challenge)" in output
     assert "Ann (A): apple  +25\n" in output  # 5 letters + 20 seconds
-    assert "Bob (E): eagle  +50  (x2 bonus!)" in output
-    assert "Ann (E): edge  +48  (x2 bonus!)" in output
+    assert "Bob (E): eagle  +50  (x2 bonus)" in output
+    assert "Ann (E): edge  +48  (x2 bonus)" in output
     assert "Bob (E): else  +24\n" in output
 
 
@@ -270,7 +271,7 @@ def finished_game_vs_computer(game_type=Game, **rules):
             game.multiplier = 1.0
         game.play(word, seconds=0)
     game.skip()  # the computer passes, finishing the round
-    neer.score = 104  # skip ahead to Neer winning
+    neer.score = game.target_score + 4  # skip ahead to Neer winning
     return game
 
 
@@ -282,10 +283,10 @@ def test_record_stats_saves_the_game_and_announces_news(stats_file, capsys):
     assert [entry.word for entry in stats.high_scores["classic"]] == ["giraffe", "apple"]
     assert stats.words == {"apple": 1, "giraffe": 1}
     output = capsys.readouterr().out
-    assert "New classic high score #1: Neer scored 17 with 'giraffe'!" in output
-    assert "Your classic record against hard: 1 won, 0 lost." in output
+    assert "New high score #1: giraffe (17)" in output
+    assert "Record vs hard: 1 won, 0 lost" in output
     assert "New longest word" not in output  # nothing to beat yet
-    assert f"See all your stats with: {cli.program_name()} --stats" in output
+    assert f"All stats: {cli.program_name()} --stats" in output
 
 
 def test_record_stats_announces_a_new_longest_word(stats_file, capsys):
@@ -293,15 +294,16 @@ def test_record_stats_announces_a_new_longest_word(stats_file, capsys):
     cli.record_stats(finished_game_vs_computer(ChallengeGame), stats_file)
 
     output = capsys.readouterr().out
-    assert "New longest word: 'giraffe' (7 letters)!" in output
-    assert "Your challenge record against hard: 1 won, 0 lost." in output
+    assert "New longest word: giraffe" in output
+    assert "Record vs hard: 1 won, 0 lost" in output
+    assert Stats.load(stats_file).records["challenge"]["hard"] == Record(played=1, won=1)
 
 
 def test_record_stats_skips_games_with_custom_rules(stats_file, capsys):
     cli.record_stats(finished_game_vs_computer(target_score=50), stats_file)
 
     assert not stats_file.exists()
-    assert "custom rules don't count" in capsys.readouterr().out
+    assert "isn't in your stats" in capsys.readouterr().out
 
 
 def test_record_stats_survives_a_broken_stats_file(stats_file, capsys):
@@ -309,7 +311,7 @@ def test_record_stats_survives_a_broken_stats_file(stats_file, capsys):
     cli.record_stats(finished_game_vs_computer(), stats_file)
 
     assert stats_file.read_text() == "not json"
-    assert "Your stats weren't updated." in capsys.readouterr().out
+    assert "Stats not saved." in capsys.readouterr().out
 
 
 def test_stats_flag_prints_the_report(stats_file, capsys):
@@ -377,3 +379,33 @@ def test_challenges_follow_the_computers_difficulty():
     people = [Player("Ann"), Player("Bob")]
     assert cli.new_game(ChallengeGame, people, args).difficulty == "hard"
     assert type(cli.new_game(Game, people, args)) is Game
+
+
+def test_rules_flag_explains_how_to_play(capsys):
+    assert cli.main(["--rules"]) == 0
+    output = capsys.readouterr().out
+    assert "How to play" in output
+    assert "Challenge mode" in output
+    assert "up to 4 people" in output
+    assert "150 in challenge mode" in output
+
+
+def test_instructions_only_show_when_asked_for(capsys):
+    game = Game([Player("Ann"), Player("Bob")], WordList(["apple", "egg"]), target_score=10)
+    game.letter = "A"
+    cli.play(game, keyboard=FakeKeyboard("apple\negg\n"))
+    output = capsys.readouterr().out
+    assert "How to play" not in output
+    assert "points to win" not in output
+
+
+def test_challenge_mode_shows_the_bonus_then_counts_down(capsys):
+    game = ChallengeGame([Player("Ann"), Player("Bob")], WordList.default(), rng=random.Random(0))
+    pauses = []
+    cli.show_bonus(game, sleep=pauses.append)
+    output = capsys.readouterr().out
+    assert f"BONUS x{game.multiplier:g}: {game.bonus.text}" in output
+    assert [line for line in output.split("\r") if "Starting in" in line] == [
+        f"  Starting in {n}..." for n in (5, 4, 3, 2, 1)
+    ]
+    assert pauses == [1] * 5

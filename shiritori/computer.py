@@ -14,37 +14,56 @@ class Difficulty:
     """How the computer plays.
 
     Word lengths are drawn from a normal distribution and kept within
-    ``min_length``..``max_length`` (no upper limit when ``max_length`` is None).
-    Longer words score more, so harder opponents reach the target sooner.
+    ``min_length``..``max_length``. Longer words score more.
 
-    In challenge mode, ``bonus_chance`` is how often the computer goes for the
-    bonus challenge, and ``challenge_thinking`` is roughly how many seconds it
-    takes to come up with a word.
+    ``thinking`` and ``challenge_thinking`` are the average seconds the computer
+    takes to come up with a word in classic and challenge mode; the actual time
+    varies from turn to turn, like a person's. ``typing`` is the seconds it
+    takes per letter. ``bonus_chance`` is how often it goes for the bonus
+    challenge in challenge mode.
     """
 
     name: str
     min_length: int
-    max_length: int | None
+    max_length: int
     mean_length: float
     stdev: float
-    bonus_chance: float
+    thinking: float
     challenge_thinking: float
+    typing: float
+    bonus_chance: float
 
 
 DIFFICULTIES = {
     difficulty.name: difficulty
     for difficulty in (
         Difficulty(
-            "easy", 3, 6, mean_length=4.5, stdev=0.8, bonus_chance=0.1, challenge_thinking=7
+            "easy",
+            3,
+            6,
+            4.5,
+            0.8,
+            thinking=2.5,
+            challenge_thinking=9.5,
+            typing=0.25,
+            bonus_chance=0.05,
         ),
         Difficulty(
-            "medium", 6, 11, mean_length=8, stdev=1.3, bonus_chance=0.25, challenge_thinking=5
+            "medium", 4, 8, 6, 1, thinking=2.7, challenge_thinking=9, typing=0.25, bonus_chance=0.1
         ),
         Difficulty(
-            "hard", 8, None, mean_length=12, stdev=3, bonus_chance=0.4, challenge_thinking=3.5
+            "hard", 5, 10, 7, 1.5, thinking=2.7, challenge_thinking=8, typing=0.2, bonus_chance=0.2
         ),
         Difficulty(
-            "impossible", 13, None, mean_length=18, stdev=4, bonus_chance=0.6, challenge_thinking=2
+            "impossible",
+            7,
+            12,
+            9,
+            1.5,
+            thinking=2.7,
+            challenge_thinking=6.5,
+            typing=0.18,
+            bonus_chance=0.25,
         ),
     )
 }
@@ -75,20 +94,25 @@ def choose_word(game: Game, difficulty: Difficulty, rng: random.Random) -> str |
 
 def thinking_time(game: Game, difficulty: Difficulty, word: str, rng: random.Random) -> float:
     """How many seconds the computer pauses to "think" before typing *word*."""
+    mean = difficulty.thinking
     if isinstance(game, ChallengeGame):
         mean = difficulty.challenge_thinking
         if game.multiplier_for(word) > 1:
-            mean += 2.5  # Finding a word for the bonus as well takes longer.
-        return max(1.0, rng.gauss(mean, mean / 4))
-    return max(0.2, rng.gauss(0.9, 0.2))
+            mean += 3  # Finding a word for the bonus as well takes longer.
+    # Mostly close to the average, with the occasional long think.
+    spread = 0.4
+    return max(0.5, mean * rng.lognormvariate(-(spread**2) / 2, spread))
 
 
-def typing_delays(word: str, rng: random.Random, thinking: float) -> list[float]:
+def typing_delays(
+    word: str, rng: random.Random, thinking: float, letter_time: float = 0.17
+) -> list[float]:
     """Return human-like pauses, in seconds, before each letter of *word* and before Enter.
 
-    *thinking* is added to the pause before the first letter.
+    *thinking* is added to the pause before the first letter, and each letter
+    takes *letter_time* seconds on average.
     """
-    delays = [max(0.05, rng.gauss(0.17, 0.07)) for _ in word]
+    delays = [max(0.05, rng.gauss(letter_time, letter_time / 2.5)) for _ in word]
     delays.append(max(0.05, rng.gauss(0.3, 0.1)))
     delays[0] += thinking
     return delays

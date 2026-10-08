@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from .words import WordList
 
 MIN_WORD_LENGTH = 3
-DEFAULT_TARGET_SCORE = 100
 
 # Q, X, Y and Z are left out because they make for an awkward first word.
 STARTING_LETTERS = "ABCDEFGHIJKLMNOPRSTUVW"
@@ -43,6 +42,7 @@ class Game:
     """
 
     mode = "classic"
+    default_target_score = 100
     default_turn_time = 10
 
     def __init__(
@@ -50,7 +50,7 @@ class Game:
         players: Sequence[Player],
         words: WordList,
         *,
-        target_score: int = DEFAULT_TARGET_SCORE,
+        target_score: int | None = None,
         turn_time: int | None = None,
         rng: random.Random | None = None,
     ) -> None:
@@ -58,7 +58,7 @@ class Game:
             raise ValueError("A game needs at least two players.")
         self.players = list(players)
         self.words = words
-        self.target_score = target_score
+        self.target_score = target_score or self.default_target_score
         self.turn_time = turn_time or self.default_turn_time
         self.used_words: set[str] = set()
         self.moves: list[Move] = []

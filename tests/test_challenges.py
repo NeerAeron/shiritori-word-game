@@ -254,3 +254,9 @@ def test_falls_back_when_few_words_are_left():
     game.letter = "X"
     challenge = game._pick_challenge()
     assert any(challenge.test(word) for word in ("xenon", "xerox", "xylem"))
+
+
+def test_challenge_games_play_to_150():
+    assert make_game().target_score == 150
+    assert Game([Player("Ann"), Player("Bob")], WORDS).target_score == 100
+    assert make_game(target_score=80).target_score == 80

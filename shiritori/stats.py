@@ -16,7 +16,7 @@ from datetime import date
 from pathlib import Path
 
 from .computer import DIFFICULTIES, ComputerPlayer
-from .game import DEFAULT_TARGET_SCORE, Game
+from .game import Game
 
 FORMAT_VERSION = 2
 HIGH_SCORE_COUNT = 10
@@ -36,7 +36,9 @@ def stats_file() -> Path:
 
 def counts_toward_stats(game: Game) -> bool:
     """Only games played with the standard rules count, so records stay comparable."""
-    return game.target_score == DEFAULT_TARGET_SCORE and game.turn_time == game.default_turn_time
+    return (
+        game.target_score == game.default_target_score and game.turn_time == game.default_turn_time
+    )
 
 
 class StatsError(Exception):

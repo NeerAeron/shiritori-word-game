@@ -13,7 +13,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 
-from .game import DEFAULT_TARGET_SCORE, MIN_WORD_LENGTH, Game, Player
+from .game import MIN_WORD_LENGTH, Game, Player
 from .words import WordList
 
 VOWELS = frozenset("aeiou")
@@ -294,6 +294,7 @@ class ChallengeGame(Game):
     """
 
     mode = "challenge"
+    default_target_score = 150
     default_turn_time = 20
 
     def __init__(
@@ -301,7 +302,7 @@ class ChallengeGame(Game):
         players: Sequence[Player],
         words: WordList,
         *,
-        target_score: int = DEFAULT_TARGET_SCORE,
+        target_score: int | None = None,
         turn_time: int | None = None,
         difficulty: str = DEFAULT_DIFFICULTY,
         rng: random.Random | None = None,
