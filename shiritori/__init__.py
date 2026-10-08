@@ -1,3 +1,3 @@
 """Shiritori: the word-chain game, in your terminal."""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

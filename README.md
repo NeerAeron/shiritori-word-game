@@ -8,9 +8,10 @@ terminal. You race a countdown clock against a computer opponent or against
 friends on the same keyboard.
 
 ```text
-First to 100 points wins. Words score a point per letter, plus a point
+Reach 100 points to win. Words score a point per letter, plus a point
 for every second left on the 10-second clock (or minus one for every
-second over).
+second over). Once someone reaches 100, the round is played out so
+everyone gets the same number of turns, and the highest score wins.
 
 Neer (T): tiger  +13
     Neer: 13 | Computer: 0
@@ -26,40 +27,59 @@ Neer (B): banana  +14
 - **Two modes:** classic Shiritori, and challenge mode, where every word must
   also meet a spelling challenge and a bonus challenge multiplies your points.
 - **Solo or together:** play the computer at four difficulty levels, or with
-  up to 10 people taking turns at one keyboard.
+  up to 4 people taking turns at one keyboard.
+- **Fair turns:** everyone always gets the same number of turns, so going
+  first is no advantage.
 - **A live countdown** on every turn. Answer quickly to earn bonus points.
 - **Instant feedback** when a word is rejected, so you can fix it and try again.
 - **Saved stats:** your record against each difficulty, high scores, favorite
   word, longest word, and more.
-- **Nothing to install.** The whole game, including your stats, lives in one
-  folder. It needs only Python and runs on Linux, macOS, and Windows.
+- **Self-contained.** No dependencies beyond Python, and the game, including
+  your stats, stays in its own folder. Runs on Linux, macOS, and Windows.
 
 ## Getting started
 
-You need Python 3.10 or newer. Download the game with git:
+You need Python 3.10 or newer. There are two ways to get the game.
+
+### Play from a folder (no install)
+
+Download the game with git, or download the ZIP from GitHub
+(**Code → Download ZIP**) and unzip it:
 
 ```sh
 git clone https://github.com/NeerAeron/shiritori-word-game.git shiritori
-```
-
-Or download the ZIP from GitHub (**Code → Download ZIP**) and unzip it. Then
-start the game from the folder:
-
-```sh
 cd shiritori
 python play.py
 ```
 
-On some systems the command is `python3` instead of `python`.
+On some systems the command is `python3` instead of `python`. Everything the
+game uses or saves stays inside this folder. To remove it, delete the folder.
 
-Everything the game uses or saves stays inside its folder. To remove it, just
-delete the folder.
+### Install the `shiritori` command
+
+With [pipx](https://pipx.pypa.io/), which keeps the game in its own isolated
+environment:
+
+```sh
+pipx install git+https://github.com/NeerAeron/shiritori-word-game.git
+shiritori
+```
+
+Or with pip (ideally inside a virtual environment):
+
+```sh
+pip install git+https://github.com/NeerAeron/shiritori-word-game.git
+shiritori
+```
+
+`pipx uninstall shiritori-word-game` or `pip uninstall shiritori-word-game`
+removes it again.
 
 ## How to play
 
-When the game starts, you choose a mode and how many people are playing, and
-enter their names. If you play alone, you also pick a difficulty for the
-computer opponent.
+When the game starts, you choose a mode and how many people are playing (up
+to 4), and enter their names. If you play alone, you also pick a difficulty
+for the computer opponent.
 
 Each turn shows a countdown, the current player, and the letter their word
 must start with:
@@ -85,16 +105,26 @@ Type a word and press **Enter**. Use **Backspace** to correct mistakes and
 
 A word earns one point per letter plus a time bonus equal to the seconds left
 on the clock. Once the clock passes zero it keeps counting down and the bonus
-becomes a penalty, so a slow answer can lose you points. The first player to
-reach the target score (100 by default) wins.
+becomes a penalty, so a slow answer can lose you points.
 
 For example, playing `elephant` (8 letters) with 6 seconds left scores
 8 + 6 = 14 points. Playing it 3 seconds after time runs out scores 8 − 3 = 5.
 
+### Winning
+
+The game ends when someone reaches the target score (100 by default), but
+not right away: the rest of that round is still played, so everyone gets the
+same number of turns. Then the highest score wins. If the lead is tied, the
+game plays another round.
+
+This matters because a race to 100 heavily favors whoever goes first. In
+simulations of evenly matched people, the first player won about 66% of
+two-player games under first-to-100 rules. With equal turns it's 50%.
+
 ## Challenge mode
 
 In challenge mode, every word must also meet a **challenge** that changes
-each turn. There are 100 of them, from easy to hard, such as:
+each turn. There are 131 of them, from easy to hard, such as:
 
 - end with S
 - no letter E
@@ -107,8 +137,20 @@ The game only sets a challenge when there are plenty of words that meet it,
 so none is ever too hard. Challenges never depend on how long a word is.
 Vowels are A, E, I, O, and U; Y counts as a consonant.
 
+The challenges are ranked from easiest to hardest, and each difficulty draws
+from a bell curve along that ranking. Easier difficulties lean toward the
+easy end; impossible is centered. Games between people use the hard mix.
+
+| Difficulty | Bell curve           | Easy | Medium | Hard |
+| ---------- | -------------------- | ---: | -----: | ---: |
+| easy       | heavily toward easy  |  73% |    26% |   1% |
+| medium     | toward easy          |  49% |    46% |   4% |
+| hard       | slightly toward easy |  31% |    58% |  10% |
+| impossible | centered             |  24% |    58% |  18% |
+
 Each game also has one **bonus challenge** that lasts the whole game, like
-"use all five vowels" or "no A, E, or I". A word that meets the turn's
+"use all five vowels" or "no A, E, or I". It's picked at random from 30
+bonus challenges, each equally likely. A word that meets the turn's
 challenge *and* the bonus challenge has its points multiplied:
 
 ```text
@@ -120,9 +162,9 @@ Computer (Y): yogurt  +19
     Neer: 51 | Computer: 19
 ```
 
-Harder bonus challenges pay more, from about 1.5x to 4x, with a little
+Harder bonus challenges pay more, from 1.5x up to at most 3x, with a little
 randomness so no two games are quite the same. Multipliers around 2x are the
-most common, smaller ones are slightly rarer, and big ones are much rarer.
+most common, smaller ones are slightly rarer, and 3x ones are the rarest.
 A bonus multiplies points but never makes a late answer's penalty worse.
 
 The clock is 20 seconds in challenge mode, to give you time to think.
@@ -155,7 +197,7 @@ The game tells you when you set a new high score or a new longest word, and
 shows your updated record. To see everything, run:
 
 ```sh
-python play.py --stats
+python play.py --stats      # or, if you installed it: shiritori --stats
 ```
 
 ```text
@@ -174,9 +216,15 @@ Classic mode against the computer
   impossible       0    0     0         -
 ```
 
-Stats are saved in `stats.json` in the game folder, never anywhere else on
-your computer, and never uploaded. The file is listed in `.gitignore`, so it
-never gets committed. To start over, run `python play.py --reset-stats`.
+Stats are saved in a `stats.json` file inside the game's own folder, never
+anywhere else on your computer, and never uploaded:
+
+- **Playing from a folder:** next to `play.py`. The file is listed in
+  `.gitignore`, so it never gets committed.
+- **Installed with pip or pipx:** in the installed package's own folder
+  (for pipx, that's inside the game's isolated environment).
+
+`--stats` shows the exact path. To start over, run `--reset-stats`.
 
 Only games played with the standard rules count, so records stay comparable.
 Games with a custom `--target-score` or `--turn-time` aren't recorded, and
@@ -187,6 +235,8 @@ neither are games you quit with Ctrl+C.
 ```text
 python play.py [--target-score POINTS] [--turn-time SECONDS] [--stats | --reset-stats]
 ```
+
+If you installed the game, use `shiritori` in place of `python play.py`.
 
 | Option                  | Default                     | Description                      |
 | ----------------------- | --------------------------- | -------------------------------- |
@@ -203,13 +253,13 @@ one, try `python play.py --turn-time 30`. Neither counts toward your stats.
 ## Development
 
 The tests use [pytest](https://pytest.org/) and the code is linted and
-formatted with [Ruff](https://docs.astral.sh/ruff/). To keep them inside the
-game folder too, install them in a virtual environment there:
+formatted with [Ruff](https://docs.astral.sh/ruff/). Set up a virtual
+environment in the game folder with an editable install and both tools:
 
 ```sh
 python -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install pytest ruff
+pip install -e ".[dev]"
 ```
 
 Then run the tests, linter, and formatter:

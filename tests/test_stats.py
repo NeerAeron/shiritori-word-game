@@ -34,6 +34,8 @@ def finished_game(players, words=("apple", "egg", "giraffe"), game_type=Game):
         if isinstance(game, ChallengeGame):
             game.challenge = ANY_WORD
         game.play(word, seconds=0)
+    while not game.round_complete:
+        game.skip()
     players[0].score = max(players[0].score, 100)
     return game
 
@@ -50,8 +52,15 @@ def the_computer_beats_you(difficulty="medium"):
     return finished_game([computer, you])  # Neer: egg
 
 
-def test_stats_live_in_the_game_folder():
-    assert stats_file() == stats_module.GAME_FOLDER / "stats.json"
+def test_stats_live_next_to_play_py(tmp_path):
+    assert stats_file() == tmp_path / "stats.json"
+    assert (tmp_path / "play.py").is_file()
+
+
+def test_installed_copies_keep_stats_in_their_package_folder(monkeypatch, tmp_path):
+    package = tmp_path / "site-packages" / "shiritori"
+    monkeypatch.setattr(stats_module, "PACKAGE_FOLDER", package)
+    assert stats_file() == package / "stats.json"
 
 
 def test_the_real_game_folder_holds_the_game():

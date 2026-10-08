@@ -123,13 +123,13 @@ def test_blank_answers_use_the_defaults(answers):
 
 
 def test_reprompts_after_invalid_answers(answers, capsys):
-    prompts = answers("0", "11", "two", "2", "computer", "Ann", "ANN", "x" * 21, "Bob")
+    prompts = answers("0", "5", "two", "2", "computer", "Ann", "ANN", "x" * 21, "Bob")
     players = cli.ask_players()
 
     assert [player.name for player in players] == ["Ann", "Bob"]
     assert len(prompts) == 9
     output = capsys.readouterr().out
-    assert "Enter a number from 1 to 10." in output
+    assert "Enter a number from 1 to 4." in output
     assert "'Computer' is reserved for the computer." in output
     assert "'ANN' is already playing." in output
     assert "Keep names to 20 characters or fewer." in output
@@ -157,16 +157,17 @@ def test_computers_play_until_someone_wins(instant_computer, capsys, game_type):
     winner = cli.play(game, random.Random(2), FakeKeyboard())
 
     assert winner.score >= 60
-    assert [player for player in players if player.score >= 60] == [winner]
+    assert winner.score == max(player.score for player in players)
+    assert game.round_complete  # both players had the same number of turns
     output = capsys.readouterr().out
-    assert "First to 60 points wins." in output
+    assert "Reach 60 points to win." in output
     assert f"Hal: {players[0].score} | Eve: {players[1].score}" in output
     assert ("Challenge:" in output) == (game_type is ChallengeGame)
 
 
 def test_play_with_people_at_the_keyboard(capsys):
-    keyboard = FakeKeyboard("xyz\n\x7f\x7f\x7fapple\negg\ngiraffe\n")
-    words = WordList(["apple", "egg", "giraffe"])
+    keyboard = FakeKeyboard("xyz\n\x7f\x7f\x7fapple\negg\ngiraffe\nelephant\n")
+    words = WordList(["apple", "egg", "giraffe", "elephant"])
     game = Game([Player("Ann"), Player("Bob")], words, target_score=30)
     game.letter = "A"
 
@@ -174,26 +175,42 @@ def test_play_with_people_at_the_keyboard(capsys):
 
     assert winner.name == "Ann"
     assert keyboard.keys == []
-    assert keyboard.discarded == 3  # before each person's turn
+    assert keyboard.discarded == 4  # before each person's turn
     output = capsys.readouterr().out
     assert "xyz  (must start with A)" in output
     assert "Ann (A): apple  +15" in output
     assert "Bob (E): egg  +13" in output
     assert "Ann (G): giraffe  +17" in output
+    assert "Ann reached 30! The round will be played out" in output
+    assert "Bob (E): elephant  +18" in output  # Bob still gets his turn: 31 to Ann's 32
+
+
+def test_a_tie_for_the_lead_plays_another_round(capsys):
+    keyboard = FakeKeyboard("apple\negg\ngiraffe\nelephant\ntiger\nrabbit\n")
+    words = WordList(["apple", "egg", "giraffe", "elephant", "tiger", "rabbit"])
+    game = Game([Player("Ann"), Player("Bob", score=1)], words, target_score=30)
+    game.letter = "A"
+
+    winner = cli.play(game, keyboard=keyboard)
+
+    assert winner.name == "Bob"  # 32 all after two rounds, then 47 to 48
+    output = capsys.readouterr().out
+    assert "It's a tie for the lead! Playing another round." in output
+    assert "Bob (R): rabbit  +16" in output
 
 
 def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     end_with_e = Challenge("end with E", lambda word: word.endswith("e"))
     monkeypatch.setattr(ChallengeGame, "_pick_challenge", lambda self: end_with_e)
-    keyboard = FakeKeyboard("ant\n\x7f\x7f\x7fapple\neagle\nedge\n")
-    words = WordList(["ant", "apple", "eagle", "edge"])
+    keyboard = FakeKeyboard("ant\n\x7f\x7f\x7fapple\neagle\nedge\nelse\n")
+    words = WordList(["ant", "apple", "eagle", "edge", "else"])
     game = ChallengeGame([Player("Ann"), Player("Bob")], words, target_score=60)
     game.letter = "A"
     game.bonus, game.multiplier = Challenge("include G", lambda word: "g" in word), 2.0
 
     winner = cli.play(game, keyboard=keyboard)
 
-    assert winner.name == "Ann"
+    assert winner.name == "Bob"  # 74 to 73, thanks to his last turn
     output = capsys.readouterr().out
     assert "Challenge mode: every word must also meet a challenge" in output
     assert "Bonus challenge for this game: include G." in output
@@ -202,6 +219,7 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     assert "Ann (A): apple  +25\n" in output  # 5 letters + 20 seconds
     assert "Bob (E): eagle  +50  (x2 bonus!)" in output
     assert "Ann (E): edge  +48  (x2 bonus!)" in output
+    assert "Bob (E): else  +24\n" in output
 
 
 def test_main_needs_a_terminal(monkeypatch, capsys):
@@ -251,6 +269,7 @@ def finished_game_vs_computer(game_type=Game, **rules):
             game.challenge = Challenge("any", lambda word: True)
             game.multiplier = 1.0
         game.play(word, seconds=0)
+    game.skip()  # the computer passes, finishing the round
     neer.score = 104  # skip ahead to Neer winning
     return game
 
@@ -266,7 +285,7 @@ def test_record_stats_saves_the_game_and_announces_news(stats_file, capsys):
     assert "New classic high score #1: Neer scored 17 with 'giraffe'!" in output
     assert "Your classic record against hard: 1 won, 0 lost." in output
     assert "New longest word" not in output  # nothing to beat yet
-    assert "python play.py --stats" in output
+    assert f"See all your stats with: {cli.program_name()} --stats" in output
 
 
 def test_record_stats_announces_a_new_longest_word(stats_file, capsys):
@@ -333,3 +352,28 @@ def test_reset_stats_asks_first(answers, stats_file, answer, erased):
 def test_reset_stats_with_nothing_to_erase(stats_file, capsys):
     assert cli.main(["--reset-stats"]) == 0
     assert "no stats to erase" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("script", "name"),
+    [
+        ("/home/neer/shiritori/play.py", "python play.py"),
+        ("/home/neer/shiritori/shiritori/__main__.py", "python -m shiritori"),
+        ("/home/neer/.local/bin/shiritori", "shiritori"),
+    ],
+)
+def test_program_name_matches_how_the_game_was_started(monkeypatch, script, name):
+    monkeypatch.setattr("sys.argv", [script])
+    assert cli.program_name() == name
+
+
+def test_challenges_follow_the_computers_difficulty():
+    args = cli.parse_args([])
+    you_vs_hard = [
+        Player("Neer"),
+        ComputerPlayer("Computer", difficulty=DIFFICULTIES["impossible"]),
+    ]
+    assert cli.new_game(ChallengeGame, you_vs_hard, args).difficulty == "impossible"
+    people = [Player("Ann"), Player("Bob")]
+    assert cli.new_game(ChallengeGame, people, args).difficulty == "hard"
+    assert type(cli.new_game(Game, people, args)) is Game

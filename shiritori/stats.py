@@ -1,7 +1,8 @@
 """Saved stats: your record against the computer, high scores, and the words you play.
 
-Stats are kept in stats.json in the game folder (the folder with README.md in
-it) and nowhere else. .gitignore keeps the file out of version control.
+Stats are kept in stats.json inside the game's own folder and nowhere else:
+next to play.py in a downloaded copy, or in the package folder of a copy
+installed with pip or pipx. .gitignore keeps the file out of version control.
 """
 
 from __future__ import annotations
@@ -22,12 +23,15 @@ HIGH_SCORE_COUNT = 10
 MODES = ("classic", "challenge")
 MULTIPLAYER = "multiplayer"
 
-# The folder the game lives in: the one that holds this package.
-GAME_FOLDER = Path(__file__).resolve().parent.parent
+# This package's folder. In a downloaded copy it sits in the game folder, next to play.py.
+PACKAGE_FOLDER = Path(__file__).resolve().parent
 
 
 def stats_file() -> Path:
-    return GAME_FOLDER / "stats.json"
+    game_folder = PACKAGE_FOLDER.parent
+    if (game_folder / "play.py").is_file():
+        return game_folder / "stats.json"
+    return PACKAGE_FOLDER / "stats.json"
 
 
 def counts_toward_stats(game: Game) -> bool:

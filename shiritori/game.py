@@ -35,7 +35,11 @@ class Game:
     Players take turns naming a word that starts with the last letter of the
     previous word. A word scores one point per letter, plus a time bonus equal
     to the seconds left on the turn clock; once the clock runs out the bonus
-    turns into a penalty. The first player to reach the target score wins.
+    turns into a penalty.
+
+    Once someone reaches the target score, the round is played out so everyone
+    has the same number of turns, and the highest score wins. If the lead is
+    tied at the end of the round, another round is played.
     """
 
     mode = "classic"
@@ -67,10 +71,23 @@ class Game:
         return self.players[self._turn % len(self.players)]
 
     @property
+    def round_complete(self) -> bool:
+        """Whether every player has had the same number of turns."""
+        return self._turn % len(self.players) == 0
+
+    @property
+    def final_round(self) -> bool:
+        """Whether someone has reached the target, so this round is the last unless it ends tied."""
+        return any(player.score >= self.target_score for player in self.players)
+
+    @property
     def winner(self) -> Player | None:
-        """The player who has reached the target score, if anyone has."""
-        leader = max(self.players, key=lambda player: player.score)
-        return leader if leader.score >= self.target_score else None
+        """The winner, once the game is over."""
+        if not (self.round_complete and self.final_round):
+            return None
+        best = max(player.score for player in self.players)
+        leaders = [player for player in self.players if player.score == best]
+        return leaders[0] if len(leaders) == 1 else None
 
     def check_word(self, word: str) -> str | None:
         """Return why *word* can't be played this turn, or None if it can."""

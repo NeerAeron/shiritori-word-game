@@ -1,5 +1,44 @@
-# Settings for the development tools. The game itself needs no installation:
-# run it with `python play.py`.
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shiritori-word-game"
+dynamic = ["version"]
+description = "Shiritori, the word-chain game, in your terminal."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Neer Aeron" }]
+keywords = ["shiritori", "word game", "terminal", "game"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Games/Entertainment :: Puzzle Games",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+shiritori = "shiritori.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/NeerAeron/shiritori-word-game"
+Issues = "https://github.com/NeerAeron/shiritori-word-game/issues"
+
+[tool.setuptools]
+packages = ["shiritori"]
+
+[tool.setuptools.dynamic]
+version = { attr = "shiritori.__version__" }
+
+[tool.setuptools.package-data]
+shiritori = ["words.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

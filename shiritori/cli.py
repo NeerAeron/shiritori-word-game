@@ -26,8 +26,7 @@ from .stats import Stats, StatsError, counts_toward_stats, format_stats, stats_f
 from .terminal import BANNER, Keyboard, TurnPrompt
 from .words import WordList
 
-PROGRAM = "python play.py"
-MAX_PLAYERS = 10
+MAX_PLAYERS = 4
 MAX_NAME_LENGTH = 20
 COMPUTER_NAME = "Computer"
 GAME_TYPES: dict[str, type[Game]] = {"classic": Game, "challenge": ChallengeGame}
@@ -40,15 +39,16 @@ how to play:
 
   Each word scores one point per letter plus a time bonus: the seconds left
   on the turn clock. Once the clock runs out, the bonus becomes a penalty.
-  The first player to reach the target score wins.
+  When someone reaches the target score, the round is played out so everyone
+  gets the same number of turns, and the highest score wins.
 
   In challenge mode, every word must also meet a challenge that changes each
   turn, like "end with S" or "no letter E". Words that also meet the game's
   bonus challenge have their points multiplied.
 
   Your record, high scores, and favorite words are saved in stats.json in
-  the game folder. Games with a custom --target-score or --turn-time don't
-  count toward them.
+  the game's own folder. Games with a custom --target-score or --turn-time
+  don't count toward them.
 
   Play alone against the computer, or with up to {MAX_PLAYERS} people sharing one
   keyboard. Press Ctrl+C at any time to quit.
@@ -57,9 +57,19 @@ how to play:
 T = TypeVar("T")
 
 
+def program_name() -> str:
+    """The command the game was started with, for help and hints."""
+    script = Path(sys.argv[0]).name
+    if script == "play.py":
+        return "python play.py"
+    if script == "__main__.py":
+        return "python -m shiritori"
+    return "shiritori"
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=PROGRAM,
+        prog=program_name(),
         description="Play Shiritori, the word-chain game, in your terminal.",
         epilog=RULES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -174,9 +184,11 @@ def scoreboard(players: Sequence[Player]) -> str:
 def intro(game: Game) -> str:
     """Explain the rules that matter for this game."""
     rules = (
-        f"First to {game.target_score} points wins. Words score a point per letter, "
+        f"Reach {game.target_score} points to win. Words score a point per letter, "
         f"plus a point for every second left on the {game.turn_time}-second clock "
-        "(or minus one for every second over)."
+        "(or minus one for every second over). Once someone reaches "
+        f"{game.target_score}, the round is played out so everyone gets the same "
+        "number of turns, and the highest score wins."
     )
     if not isinstance(game, ChallengeGame):
         return textwrap.fill(rules, 72)
@@ -192,9 +204,10 @@ def intro(game: Game) -> str:
 
 
 def play(game: Game, rng: random.Random | None = None, keyboard: Keyboard | None = None) -> Player:
-    """Run turns until someone reaches the target score, and return the winner."""
+    """Run turns until the game has a winner, and return them."""
     rng = rng or random.Random()
     keyboard = keyboard or Keyboard()
+    announced = False
     print(f"\n{intro(game)}\n")
     with keyboard:
         while (winner := game.winner) is None:
@@ -224,6 +237,16 @@ def play(game: Game, rng: random.Random | None = None, keyboard: Keyboard | None
             bonus = game.moves[-1].multiplier
             print(f"{label}: {word}  {points:+d}" + (f"  (x{bonus:g} bonus!)" if bonus > 1 else ""))
             print(f"    {scoreboard(game.players)}")
+
+            if game.final_round and game.winner is None:
+                if game.round_complete:
+                    print("It's a tie for the lead! Playing another round.")
+                elif not announced:
+                    print(
+                        f"{player.name} reached {game.target_score}! The round will be "
+                        "played out so everyone gets the same number of turns."
+                    )
+                    announced = True
     return winner
 
 
@@ -257,7 +280,7 @@ def record_stats(game: Game, path: Path) -> None:
                 f"Your {game.mode} record against {player.difficulty.name}: "
                 f"{record.won} won, {record.lost} lost."
             )
-    print(f"See all your stats with: {PROGRAM} --stats")
+    print(f"See all your stats with: {program_name()} --stats")
 
 
 def show_stats(path: Path) -> int:
@@ -292,6 +315,17 @@ def reset_stats(path: Path) -> int:
     return 0
 
 
+def new_game(game_type: type[Game], players: list[Player], args: argparse.Namespace) -> Game:
+    rules = {"target_score": args.target_score, "turn_time": args.turn_time}
+    if game_type is ChallengeGame:
+        # Turn challenges follow the computer's difficulty. Games between people
+        # use the challenge mode default.
+        computer = next((p for p in players if isinstance(p, ComputerPlayer)), None)
+        if computer:
+            rules["difficulty"] = computer.difficulty.name
+    return game_type(players, WordList.default(), **rules)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     path = stats_file()
@@ -307,12 +341,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         game_type = ask_game_type()
         players = ask_players()
-        game = game_type(
-            players,
-            WordList.default(),
-            target_score=args.target_score,
-            turn_time=args.turn_time,
-        )
+        game = new_game(game_type, players, args)
         winner = play(game)
     except (KeyboardInterrupt, EOFError):
         print("\nThanks for playing!")

@@ -31,3 +31,7 @@ jobs:
       - run: pip install pytest
       - run: pytest
       - run: python play.py --version
+      - name: Install with pip and run the shiritori command
+        run: |
+          pip install .
+          shiritori --version
