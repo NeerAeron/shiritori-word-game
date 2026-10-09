@@ -182,23 +182,33 @@ class TurnPrompt:
 
         Only the letters a-z are accepted. Pressing Enter submits the word if
         *check* returns None for it; otherwise the problem *check* describes is
-        shown next to the word and the player can carry on editing. Typing the
-        given start again out of habit is forgiven: "bbanana" plays "banana".
+        shown next to the word and the player can carry on editing.
+
+        The start is typed already, so if the player types it anyway, that key
+        is skipped: "banana" and "anana" both play BANANA. If a word really
+        does repeat its first letter, like EEL, typing just "el" still works.
         """
+        typed_any = skipped = False
         while True:
             key = read_key()
             if key in ENTER_KEYS:
                 problem = check(self.text)
-                retyped = self.text[len(self.start) :]
-                if problem and self.start and retyped.startswith(self.start) and not check(retyped):
-                    return retyped, self.elapsed()
+                if problem and skipped and check(self.start + self.text) is None:
+                    return self.start + self.text, self.elapsed()
                 if problem is None:
                     return self.text, self.elapsed()
                 self._update(self.text, problem)
             elif key in BACKSPACE_KEYS:
                 self._update(self.text[:-1] if len(self.text) > len(self.start) else self.text)
+                if self.text == self.start:
+                    typed_any = skipped = False
             elif len(key) == 1 and key.isascii() and key.isalpha():
-                self._update(self.text + key.lower())
+                letter = key.lower()
+                if not typed_any and self.start and letter == self.start[0]:
+                    skipped = True  # They typed the given letter themselves.
+                else:
+                    self._update(self.text + letter)
+                typed_any = True
 
     def type_word(
         self,

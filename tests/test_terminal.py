@@ -98,16 +98,27 @@ def test_backspace_cannot_remove_the_first_letter(clock, out):
     assert word == "cat"
 
 
-def test_typing_the_first_letter_again_is_forgiven(clock, out):
-    def check(word):
-        return None if word in ("cat", "eel") else "not in the dictionary"
-
+def test_typing_the_given_letter_anyway_is_skipped(clock, out):
     with TurnPrompt("Ann", 10, start="c", out=out, clock=clock) as prompt:
-        word, _ = prompt.read_word(check, keys(*"cat", "\n"))
+        word, _ = prompt.read_word(accept_anything, keys(*"cat", "\n"))
     assert word == "cat"
+    assert ": Cc" not in out.getvalue()
+
+
+@pytest.mark.parametrize("typed", ["eel", "el"])
+def test_words_that_repeat_their_first_letter_work_either_way(clock, out, typed):
+    def check(word):
+        return None if word == "eel" else "not in the dictionary"
+
     with TurnPrompt("Ann", 10, start="e", out=out, clock=clock) as prompt:
-        word, _ = prompt.read_word(check, keys(*"el", "\n"))
-    assert word == "eel"  # a word that really does start with the letter twice
+        word, _ = prompt.read_word(check, keys(*typed, "\n"))
+    assert word == "eel"
+
+
+def test_the_letter_is_skipped_again_after_backspacing_to_the_start(clock, out):
+    with TurnPrompt("Ann", 10, start="c", out=out, clock=clock) as prompt:
+        word, _ = prompt.read_word(accept_anything, keys(*"cx", "\x7f", *"cat", "\n"))
+    assert word == "cat"
 
 
 def test_the_computer_types_the_rest_of_the_word(clock, out):
