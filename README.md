@@ -62,7 +62,7 @@ harder ones. Vowels are A, E, I, O, U.
   seconds of grace at 0 before they go negative.
 
 ```text
-REQ: include Y | Bonuses: +2 per S, x2.3: U is the only vowel
+REQ: include Y | +2 per S, x2.3: U is the only vowel
 +37 | Neer: Dusty  (5L + 2B + 9s) x2.3
 ```
 

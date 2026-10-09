@@ -38,9 +38,7 @@ def _includes(letters: str) -> Challenge:
 
 def _without(*letters: str) -> Challenge:
     names = " or ".join(letter.upper() for letter in letters)
-    return Challenge(
-        f"no letter {names}", lambda word: not any(letter in word for letter in letters)
-    )
+    return Challenge(f"no {names}", lambda word: not any(letter in word for letter in letters))
 
 
 def _second_letter(letter: str) -> Challenge:
@@ -382,7 +380,7 @@ class ChallengeGame(Game):
             if with_bonus >= 3:
                 fallback = challenge
                 break
-            fallback = fallback or challenge  # Like "no letter E" with "E is the only vowel"
+            fallback = fallback or challenge  # Like "no E" with "E is the only vowel"
         if fallback is None and best_count >= MIN_CHOICES:
             fallback = best  # Leaves enough words, though nearly all of them
         chosen = fallback or ANY_WORD
@@ -394,7 +392,7 @@ class ChallengeGame(Game):
 
         A bonus is spoiled if nearly every word that meets the challenge earns
         it, like "+2 per R" with "include R" or on an R turn, or if the
-        challenge all but rules it out, like "+2 per R" with "no letter R".
+        challenge all but rules it out, like "+2 per R" with "no R".
         """
         options = self._unplayed_words()
         matches = [word for word in options if self.challenge.test(word)] or options
