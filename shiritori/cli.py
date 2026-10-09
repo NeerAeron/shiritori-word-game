@@ -56,8 +56,8 @@ Challenge mode
   score), and each game has a bonus, like "include Q", that multiplies the
   points of words that meet it. Vowels are A, E, I, O, and U.
 
-  Time points (T) start at +{CHALLENGE_TIME_POINTS} and drop 1 every 2 seconds. At 0 there are
-  {GRACE_SECONDS} seconds of grace, then they drop 1 a second.
+  Time points (the s in the score) start at +{CHALLENGE_TIME_POINTS} and drop 1 every 2
+  seconds. At 0 there are {GRACE_SECONDS} seconds of grace, then they drop 1 a second.
 
 Players
 
@@ -193,17 +193,17 @@ def scoreboard(players: Sequence[Player]) -> str:
     return " | ".join(f"{player.name}: {player.score}" for player in players)
 
 
-def breakdown(move: Move, time_label: str = "s") -> str:
-    """How a word's points add up, such as "(6L + 3B + 7T) x2.4".
+def breakdown(move: Move) -> str:
+    """How a word's points add up, such as "(6L + 3B + 7s) x2.4".
 
-    That's 6 letters, a 3-point round bonus and 7 time points, times the game
-    bonus. In classic games the time points are the seconds left, labeled "s".
+    That's 6 letters, the round bonus, and the time points (in classic games,
+    the seconds left), all times the game bonus.
     """
     parts = f"{len(move.word)}L"
     if move.round_bonus:
         parts += f" + {move.round_bonus}B"
     sign = "+" if move.time_bonus >= 0 else "-"
-    text = f"({parts} {sign} {abs(move.time_bonus)}{time_label})"
+    text = f"({parts} {sign} {abs(move.time_bonus)}s)"
     if move.multiplier > 1:
         text += f" x{move.multiplier:g}"
     return text
@@ -235,7 +235,6 @@ def play(
     rng = rng or random.Random()
     keyboard = keyboard or Keyboard()
     announced = False
-    time_label = "T" if isinstance(game, ChallengeGame) else "s"
     if isinstance(game, ChallengeGame):
         show_bonus(game, sleep)
     else:
@@ -266,7 +265,7 @@ def play(
                     word, seconds = prompt.read_word(game.check_word, keyboard.read_key)
 
             points = game.play(word, seconds)
-            print(f"{label}: {word}  {points:+d}  {breakdown(game.moves[-1], time_label)}")
+            print(f"{label}: {word}  {points:+d}  {breakdown(game.moves[-1])}")
             print(f"    {scoreboard(game.players)}")
 
             if game.final_round and game.winner is None:

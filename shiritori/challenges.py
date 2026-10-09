@@ -204,7 +204,7 @@ GAME_BONUSES = {
     3.0: (
         Challenge("three vowels in a row", lambda word: _has_run(word, 3, vowels=True)),
         _includes("j"),
-        Challenge("two double letters", lambda word: len(re.findall(r"(.)\1", word)) >= 2),
+        Challenge("two double letters", lambda word: _double_letters(word) >= 2),
     ),
 }
 MIN_MULTIPLIER = 1.5
@@ -233,21 +233,27 @@ def _per_letter(letter: str, value: int) -> RoundBonus:
     return RoundBonus(f"+{value} per {letter.upper()}", lambda word: value * word.count(letter))
 
 
+def _vowel_pairs(word: str) -> int:
+    return sum(a in VOWELS and b in VOWELS for a, b in pairwise(word))
+
+
+def _double_letters(word: str) -> int:
+    return len(re.findall(r"(.)\1", word))
+
+
 # Round bonuses: a new one every word, adding points to whatever the word
 # scores. They always stack, paying for each letter or pair: "+2 per S" is
-# worth +8 for ASSESS. Rarer letters are worth more. Flat conditions, like
-# "end with a vowel", are turn challenges instead.
+# worth +8 for ASSESS. Flat conditions, like "end with a vowel", are turn
+# challenges instead. Rarer letters are worth more: +2 for the commonest,
+# up to +7 for Z, X, J and Q.
 ROUND_BONUSES = (
     *(_per_letter(letter, 2) for letter in "eaisrntol"),
     *(_per_letter(letter, 3) for letter in "cdumgph"),
     *(_per_letter(letter, 4) for letter in "by"),
+    RoundBonus("+4 per vowel pair", lambda word: 4 * _vowel_pairs(word)),
+    RoundBonus("+4 per double letter", lambda word: 4 * _double_letters(word)),
     *(_per_letter(letter, 5) for letter in "fvkw"),
-    *(_per_letter(letter, 10) for letter in "zxjq"),
-    RoundBonus(
-        "+3 per vowel pair",
-        lambda word: 3 * sum(a in VOWELS and b in VOWELS for a, b in pairwise(word)),
-    ),
-    RoundBonus("+3 per double letter", lambda word: 3 * len(re.findall(r"(.)\1", word))),
+    *(_per_letter(letter, 7) for letter in "zxjq"),
 )
 NO_ROUND_BONUS = RoundBonus("no round bonus", lambda word: 0)
 
@@ -289,7 +295,7 @@ class ChallengeGame(Game):
     """
 
     mode = "challenge"
-    default_target_score = 200
+    default_target_score = 150
     default_turn_time = 20
 
     def __init__(

@@ -45,7 +45,7 @@ shiritori
 - Words must be real, 3+ letters, A–Z only, and not already played this game.
 - **Score:** a point per letter, plus a point per second left on the 10-second
   clock, shown as `(5L + 8s)`. Run out of time and you lose a point per second over.
-- **Win:** reach 100 points (200 in challenge mode). The round is played out
+- **Win:** reach 100 points (150 in challenge mode). The round is played out
   so everyone gets the same number of turns, then the highest score wins.
 
 Type a word and press **Enter**. **Backspace** fixes mistakes, **Ctrl+C**
@@ -60,7 +60,7 @@ get harder ones. Vowels are A, E, I, O, U.
 
 Two bonuses add to your score:
 
-- **Round bonus:** a new one each turn, such as *+2 per S* or *+3 per double
+- **Round bonus:** a new one each turn, such as *+2 per S* or *+4 per double
   letter*. Every letter or pair counts, so *assess* earns +8 from *+2 per S*.
   It shows up as `B` in the score.
 - **Game bonus:** one per game, such as *include Q* or *U is the only vowel*.
@@ -68,11 +68,12 @@ Two bonuses add to your score:
 
 ```text
   Challenge: include Y | +2 per S | x2.3: U is the only vowel
-Neer (D): dusty  +37  (5L + 2B + 9T) x2.3
+Neer (D): dusty  +37  (5L + 2B + 9s) x2.3
 ```
 
-Time points (`T`) start at +10 and drop 1 every 2 seconds. At 0 there are 4
-seconds of grace before they go negative. Challenge mode plays to 200.
+Time points (the `s` in the score) start at +10 and drop 1 every 2 seconds.
+At 0 there are 4 seconds of grace before they go negative. Challenge mode
+plays to 150.
 
 ## Computer levels
 
@@ -102,7 +103,7 @@ with a custom `--target-score` or `--turn-time` don't count.
 
 | Option                  | What it does                                    |
 | ----------------------- | ----------------------------------------------- |
-| `--target-score POINTS` | Points to win (default 100, or 200 in challenge) |
+| `--target-score POINTS` | Points to win (default 100, or 150 in challenge) |
 | `--turn-time SECONDS`   | Seconds per turn (default 10, or 20 in challenge) |
 | `--rules`               | Explain how to play                             |
 | `--stats`               | Show your stats                                 |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -28,6 +29,11 @@ class Move:
     multiplier: float = 1.0  # The game bonus multiplier applied to the points, if any
     time_bonus: int = 0  # Points for time left on the clock (negative once it ran out)
     round_bonus: int = 0  # Points from the turn's round bonus
+
+
+def _round_half_up(points: float) -> int:
+    # round() would send halves to the even neighbor: 22.5 to 22, but 23.5 to 24.
+    return math.floor(round(points, 6) + 0.5)
 
 
 class Game:
@@ -127,7 +133,7 @@ class Game:
         points = len(word) + round_bonus + time_bonus
         # The game bonus multiplies a positive score, but never makes a penalty worse.
         multiplier = self.multiplier_for(word) if points > 0 else 1.0
-        points = round(points * multiplier)
+        points = _round_half_up(points * multiplier)
         return Move(self.current_player, word, points, multiplier, time_bonus, round_bonus)
 
     def play(self, word: str, seconds: float) -> int:

@@ -221,10 +221,10 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     assert "  Challenge: end with E | +3 per L | x2: include G" in output
     assert "+10 | Ann (A): apple" in output  # the countdown shows time points
     assert "ant  (doesn't meet the challenge)" in output
-    assert "Ann (A): apple  +18  (5L + 3B + 10T)\n" in output
-    assert "Bob (E): eagle  +36  (5L + 3B + 10T) x2" in output
-    assert "Ann (E): edge  +28  (4L + 10T) x2" in output
-    assert "Bob (E): else  +17  (4L + 3B + 10T)\n" in output
+    assert "Ann (A): apple  +18  (5L + 3B + 10s)\n" in output
+    assert "Bob (E): eagle  +36  (5L + 3B + 10s) x2" in output
+    assert "Ann (E): edge  +28  (4L + 10s) x2" in output
+    assert "Bob (E): else  +17  (4L + 3B + 10s)\n" in output
 
 
 def test_main_needs_a_terminal(monkeypatch, capsys):
@@ -392,8 +392,8 @@ def test_rules_flag_explains_how_to_play(capsys):
     assert "How to play" in output
     assert "Challenge mode" in output
     assert "up to 4 people" in output
-    assert "200 in challenge mode" in output
-    assert "Time points (T) start at +10 and drop 1 every 2 seconds" in output
+    assert "150 in challenge mode" in output
+    assert "start at +10 and drop 1 every 2" in output
 
 
 def test_instructions_only_show_when_asked_for(capsys):
@@ -422,19 +422,9 @@ def test_challenge_mode_shows_the_bonus_then_counts_down(capsys):
     [
         (Move(Player("Neer"), "restitution", 17, time_bonus=6), "(11L + 6s)"),
         (Move(Player("Neer"), "tiger", 2, time_bonus=-3), "(5L - 3s)"),
+        (Move(Player("Neer"), "kiosks", 17, time_bonus=8, round_bonus=3), "(6L + 3B + 8s)"),
+        (Move(Player("Neer"), "dusty", 37, 2.3, 9, 2), "(5L + 2B + 9s) x2.3"),
     ],
 )
 def test_breakdown_shows_how_the_points_add_up(move, text):
     assert cli.breakdown(move) == text
-
-
-@pytest.mark.parametrize(
-    ("move", "text"),
-    [
-        (Move(Player("Neer"), "kiosks", 17, time_bonus=8, round_bonus=3), "(6L + 3B + 8T)"),
-        (Move(Player("Neer"), "dusty", 37, 2.3, 9, 2), "(5L + 2B + 9T) x2.3"),
-        (Move(Player("Neer"), "yak", 1, time_bonus=-2), "(3L - 2T)"),
-    ],
-)
-def test_breakdown_labels_challenge_time_points(move, text):
-    assert cli.breakdown(move, "T") == text

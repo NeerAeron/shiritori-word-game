@@ -16,6 +16,7 @@ from shiritori.challenges import (
     MEDIUM,
     MIN_CHOICES,
     MIN_MULTIPLIER,
+    NO_ROUND_BONUS,
     RECENT_TURNS,
     ROUND_BONUSES,
     TURN_CHALLENGES,
@@ -158,7 +159,7 @@ def test_there_is_a_short_round_bonus_for_every_letter_and_two_pairs():
     texts = [bonus.text for bonus in ROUND_BONUSES]
     assert len(texts) == 28
     assert len(set(texts)) == len(texts)
-    assert all(re.fullmatch(r"\+\d+ per [A-Z]|\+\d+ per [a-z ]+", text) for text in texts)
+    assert all(re.fullmatch(r"\+\d per ([A-Z]|[a-z ]+)", text) for text in texts)
     assert max(map(len, texts)) <= 20
 
 
@@ -178,11 +179,11 @@ def test_round_bonuses_always_stack(bonus):
         ("+2 per E", "excellence", 8),
         ("+3 per D", "added", 9),
         ("+4 per Y", "yearly", 8),
+        ("+4 per vowel pair", "queue", 12),
+        ("+4 per double letter", "bookkeeper", 12),
         ("+5 per K", "kayak", 10),
-        ("+10 per Z", "pizzazz", 40),
-        ("+10 per Q", "cat", 0),
-        ("+3 per vowel pair", "queue", 9),
-        ("+3 per double letter", "bookkeeper", 9),
+        ("+7 per Z", "pizzazz", 28),
+        ("+7 per Q", "cat", 0),
     ],
 )
 def test_round_bonuses_add_what_they_say(text, word, points):
@@ -193,7 +194,7 @@ def test_round_bonuses_add_what_they_say(text, word, points):
 def test_rarer_letters_earn_more_round_bonus_points():
     value = {}
     for bonus in ROUND_BONUSES:
-        if match := re.fullmatch(r"\+(\d+) per ([A-Z])", bonus.text):
+        if match := re.fullmatch(r"\+(\d) per ([A-Z])", bonus.text):
             value[match[2].lower()] = int(match[1])
     assert sorted(value) == list("abcdefghijklmnopqrstuvwxyz")
 
@@ -203,7 +204,7 @@ def test_rarer_letters_earn_more_round_bonus_points():
     by_share = sorted(value, key=share, reverse=True)
     assert [value[letter] for letter in by_share] == sorted(value.values())
     assert value["s"] == value["e"] == min(value.values()) == 2
-    assert value["z"] == value["q"] == 10
+    assert value["z"] == value["q"] == max(value.values()) == 7
 
 
 def tier_shares(weights):
@@ -284,7 +285,7 @@ def test_meeting_the_bonus_multiplies_the_points():
     game = make_game()
     game.letter = "C"
     game.challenge = ANY_WORD
-    game.round_bonus = RoundBonus("+10 per X", lambda word: 10 * word.count("x"))
+    game.round_bonus = RoundBonus("+5 per X", lambda word: 5 * word.count("x"))
     game.bonus, game.multiplier = Challenge("include Z", lambda word: "z" in word), 2.5
 
     assert game.score("cat", seconds=0) == 13  # 3 letters + 10 time points
@@ -309,6 +310,15 @@ def test_the_round_bonus_adds_points_before_the_multiplier():
     assert game.moves[-1].round_bonus == 6
     assert game.moves[-1].time_bonus == 8
     assert game.players[0].score == 6 + 6 + 8
+
+
+@pytest.mark.parametrize(("multiplier", "points"), [(1.5, 23), (2.3, 35), (2.5, 38)])
+def test_multiplied_points_round_halves_up(multiplier, points):
+    game = make_game()
+    game.challenge = ANY_WORD
+    game.round_bonus = NO_ROUND_BONUS
+    game.bonus, game.multiplier = Challenge("include Z", lambda word: "z" in word), multiplier
+    assert game.score("zebra", seconds=0) == points  # (5 + 10) x the multiplier
 
 
 def test_every_turn_gets_a_new_round_bonus():
@@ -402,7 +412,7 @@ def test_turns_that_hand_out_the_game_bonus_anyway_still_get_fair_challenges():
         assert MIN_CHOICES <= sum(map(challenge.test, options)) <= MAX_SHARE * len(options)
 
 
-def test_challenge_games_play_to_200():
-    assert make_game().target_score == 200
+def test_challenge_games_play_to_150():
+    assert make_game().target_score == 150
     assert Game([Player("Ann"), Player("Bob")], WORDS).target_score == 100
     assert make_game(target_score=80).target_score == 80
