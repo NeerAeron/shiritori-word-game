@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from . import __version__
-from .challenges import ChallengeGame
+from .challenges import GRACE_SECONDS, ChallengeGame
 from .computer import (
     DIFFICULTIES,
     ComputerPlayer,
@@ -32,7 +32,7 @@ COMPUTER_NAME = "Computer"
 GAME_TYPES: dict[str, type[Game]] = {"classic": Game, "challenge": ChallengeGame}
 
 CLASSIC_CLOCK = Game.default_turn_time
-CHALLENGE_CLOCK = ChallengeGame.default_turn_time
+CHALLENGE_TIME_POINTS = ChallengeGame.default_turn_time // 2  # Time points as a turn starts
 TARGET = Game.default_target_score
 CHALLENGE_TARGET = ChallengeGame.default_target_score
 
@@ -42,8 +42,8 @@ How to play
   Name a word that starts with the last letter of the previous word. Words
   must be real, {MIN_WORD_LENGTH}+ letters, and not already played this game.
 
-  Score a point per letter, plus a point per second left on the clock
-  ({CLASSIC_CLOCK}s, or {CHALLENGE_CLOCK}s in challenge mode). Run out of time and you lose points.
+  Score a point per letter, plus a point per second left on the
+  {CLASSIC_CLOCK}-second clock. Run out of time and you lose points.
   "(5L + 8s)" means 5 letters and 8 seconds left.
 
   Reaching {TARGET} points ({CHALLENGE_TARGET} in challenge mode) ends the game once
@@ -52,9 +52,12 @@ How to play
 Challenge mode
 
   Every word must also meet a challenge that changes each turn, like "end
-  with S". Each turn has a round bonus too, like "+2 per D" (B in the
+  with S". Each turn has a round bonus too, like "+2 per S" (B in the
   score), and each game has a bonus, like "include Q", that multiplies the
   points of words that meet it. Vowels are A, E, I, O, and U.
+
+  Time points (the s in the score) start at +{CHALLENGE_TIME_POINTS} and drop 1 every 2
+  seconds. At 0 there are {GRACE_SECONDS} seconds of grace, then they drop 1 a second.
 
 Players
 
@@ -191,10 +194,10 @@ def scoreboard(players: Sequence[Player]) -> str:
 
 
 def breakdown(move: Move) -> str:
-    """How a word's points add up, such as "(6L + 3B + 18s) x2.4".
+    """How a word's points add up, such as "(6L + 3B + 7s) x2.4".
 
-    That's 6 letters, a 3-point round bonus and 18 seconds left, times the
-    game bonus.
+    That's 6 letters, the round bonus, and the time points (in classic games,
+    the seconds left), all times the game bonus.
     """
     parts = f"{len(move.word)}L"
     if move.round_bonus:
@@ -213,6 +216,13 @@ def show_bonus(game: ChallengeGame, sleep: Callable[[float], None], seconds: int
         print(f"\r  Starting in {left}...", end="", flush=True)
         sleep(1)
     print("\r" + " " * 24 + "\r", end="", flush=True)
+
+
+def countdown(game: Game) -> Callable[[float], str] | None:
+    """What the turn countdown shows: time points in challenge mode, else the seconds left."""
+    if isinstance(game, ChallengeGame):
+        return lambda elapsed: f"{game.time_points(elapsed):+d}"
+    return None
 
 
 def play(
@@ -246,12 +256,12 @@ def play(
                     print(f"{player.name} is stumped! New letter: {game.letter}")
                     continue
                 thinking = thinking_time(game, player.difficulty, word, rng)
-                with TurnPrompt(label, game.turn_time) as prompt:
+                with TurnPrompt(label, game.turn_time, countdown=countdown(game)) as prompt:
                     delays = typing_delays(word, rng, thinking, player.difficulty.typing)
                     seconds = prompt.type_word(word, delays)
             else:
                 keyboard.discard_pending()
-                with TurnPrompt(label, game.turn_time) as prompt:
+                with TurnPrompt(label, game.turn_time, countdown=countdown(game)) as prompt:
                     word, seconds = prompt.read_word(game.check_word, keyboard.read_key)
 
             points = game.play(word, seconds)

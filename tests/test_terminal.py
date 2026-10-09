@@ -90,6 +90,17 @@ def test_draws_the_countdown_and_typed_text(clock, out):
     assert "\r 10 | Ann (C): cat" in out.getvalue()
 
 
+def test_countdown_can_show_something_else(clock, out):
+    def points(elapsed):
+        return f"{10 - int(elapsed // 2):+d}"
+
+    with TurnPrompt("Ann (C)", 20, countdown=points, out=out, clock=clock) as prompt:
+        prompt.read_word(accept_anything, keys(*"cat", "\n", clock=clock, seconds_per_key=1.5))
+    assert "\r+10 | Ann (C): c" in out.getvalue()
+    assert "\r +9 | Ann (C): ca" in out.getvalue()
+    assert "\r +8 | Ann (C): cat" in out.getvalue()
+
+
 def test_clears_the_line_when_done(clock, out):
     with TurnPrompt("Ann (C)", 10, out=out, clock=clock) as prompt:
         prompt.read_word(accept_anything, keys(*"cat", "\n"))

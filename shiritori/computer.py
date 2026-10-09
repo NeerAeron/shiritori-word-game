@@ -47,7 +47,9 @@ class Difficulty:
 
 # Word lengths were tuned in simulations against intermediate (beginner) and
 # experienced (other levels) players. Harder levels then got quicker thinking
-# and tactics, so they're tougher than those original targets.
+# and tactics, so they're tougher than those original targets. In challenge
+# mode, an intermediate player beats beginner about 75% of the time and an
+# experienced player beats easy about 60% of the time.
 DIFFICULTIES = {
     difficulty.name: difficulty
     for difficulty in (
@@ -71,11 +73,11 @@ DIFFICULTIES = {
             mean_length=7,
             stdev=1.2,
             thinking=1.2,
-            challenge_thinking=4.8,
+            challenge_thinking=3.5,
             spread=0.8,
             typing=0.25,
-            bonus_chance=0.05,
-            round_bonus_chance=0.2,
+            bonus_chance=0.1,
+            round_bonus_chance=0.4,
         ),
         Difficulty(
             "medium",

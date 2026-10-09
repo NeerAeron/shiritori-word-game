@@ -202,10 +202,14 @@ def test_typing_speed_sets_the_pause_between_letters():
     assert sum(fast[:-1]) / 100 == pytest.approx(0.1, rel=0.15)
 
 
-@pytest.mark.parametrize(("clock", "thinking"), [(10, "thinking"), (20, "challenge_thinking")])
-def test_harder_computers_score_more_per_turn(clock, thinking):
+@pytest.mark.parametrize(
+    ("game_type", "thinking"), [(Game, "thinking"), (ChallengeGame, "challenge_thinking")]
+)
+def test_harder_computers_score_more_per_turn(game_type, thinking):
+    game = game_type([Player("Ann"), Player("Bob")], WORDS, rng=random.Random(0))
+
     def expected_points(d):
-        return d.mean_length + clock - getattr(d, thinking) - d.mean_length * d.typing
+        return d.mean_length + game.time_points(getattr(d, thinking) + d.mean_length * d.typing)
 
     points = [expected_points(d) for d in DIFFICULTIES.values()]
     assert points == sorted(points)
