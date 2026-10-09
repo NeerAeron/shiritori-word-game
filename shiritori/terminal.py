@@ -185,28 +185,23 @@ class TurnPrompt:
         shown next to the word and the player can carry on editing.
 
         The start is typed already, so if the player types it anyway, that key
-        is skipped: "banana" and "anana" both play BANANA. If a word really
-        does repeat its first letter, like EEL, typing just "el" still works.
+        is skipped: "banana" and "anana" both play BANANA, and EEL takes "eel".
         """
-        typed_any = skipped = False
+        typed_any = False
         while True:
             key = read_key()
             if key in ENTER_KEYS:
                 problem = check(self.text)
-                if problem and skipped and check(self.start + self.text) is None:
-                    return self.start + self.text, self.elapsed()
                 if problem is None:
                     return self.text, self.elapsed()
                 self._update(self.text, problem)
             elif key in BACKSPACE_KEYS:
                 self._update(self.text[:-1] if len(self.text) > len(self.start) else self.text)
                 if self.text == self.start:
-                    typed_any = skipped = False
+                    typed_any = False
             elif len(key) == 1 and key.isascii() and key.isalpha():
                 letter = key.lower()
-                if not typed_any and self.start and letter == self.start[0]:
-                    skipped = True  # They typed the given letter themselves.
-                else:
+                if typed_any or letter != self.start[:1]:  # Skip typing the given letter again.
                     self._update(self.text + letter)
                 typed_any = True
 

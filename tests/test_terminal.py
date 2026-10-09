@@ -105,14 +105,11 @@ def test_typing_the_given_letter_anyway_is_skipped(clock, out):
     assert ": Cc" not in out.getvalue()
 
 
-@pytest.mark.parametrize("typed", ["eel", "el"])
-def test_words_that_repeat_their_first_letter_work_either_way(clock, out, typed):
-    def check(word):
-        return None if word == "eel" else "not in the dictionary"
-
+@pytest.mark.parametrize(("typed", "word"), [("eel", "eel"), ("el", "el")])
+def test_a_word_that_repeats_its_first_letter_needs_it_typed_twice(clock, out, typed, word):
     with TurnPrompt("Ann", 10, start="e", out=out, clock=clock) as prompt:
-        word, _ = prompt.read_word(check, keys(*typed, "\n"))
-    assert word == "eel"
+        played, _ = prompt.read_word(accept_anything, keys(*typed, "\n"))
+    assert played == word
 
 
 def test_the_letter_is_skipped_again_after_backspacing_to_the_start(clock, out):
