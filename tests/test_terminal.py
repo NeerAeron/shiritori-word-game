@@ -113,13 +113,38 @@ def test_a_word_that_repeats_its_first_letter_needs_it_typed_twice(clock, out, t
     assert played == word
 
 
-def test_the_letter_is_skipped_again_after_backspacing_to_the_start(clock, out):
+@pytest.mark.parametrize(
+    ("typed", "word"),
+    [
+        ("cx\x7fat", "cat"),  # Backspace takes off the x; the typed C stays
+        ("cx\x7fcat", "ccat"),
+        ("cx\x7f\x7fcat", "cat"),  # the second Backspace takes back the C
+        ("c\x7f\x7f\x7fat", "cat"),  # the given letter itself never goes
+    ],
+)
+def test_backspace_takes_back_typed_letters(clock, out, typed, word):
     with TurnPrompt("Ann", 10, start="c", out=out, clock=clock) as prompt:
-        word, _ = prompt.read_word(accept_anything, keys(*"cx", "\x7f", *"cat", "\n"))
-    assert word == "cat"
+        played, _ = prompt.read_word(accept_anything, keys(*typed, "\n"))
+    assert played == word
 
 
-def test_the_computer_types_the_rest_of_the_word(clock, out):
+def test_the_given_letter_is_bold_only_while_typed(clock, out):
+    style.use_colors(True)
+    bold_c = "\x1b[1mC\x1b[0m"
+    with TurnPrompt("Ann", 10, start="c", out=out, clock=clock) as prompt:
+        prompt.read_word(accept_anything, keys("c", "\x7f", "a", "\n"))
+    frames = out.getvalue().split("\r")
+    drawn = [(style.plain(frame).rstrip(" \b"), bold_c in frame) for frame in frames]
+    states = [state for state in drawn if "Ann:" in state[0]]
+    assert states == [
+        (" 10 | Ann: C", False),  # shown, not typed
+        (" 10 | Ann: C", True),  # typed
+        (" 10 | Ann: C", False),  # taken back
+        (" 10 | Ann: Ca", False),  # the C counts without being typed
+    ]
+
+
+def test_the_computer_types_the_given_letter_too(clock, out):
     pauses = []
 
     def sleep(seconds):
@@ -127,10 +152,10 @@ def test_the_computer_types_the_rest_of_the_word(clock, out):
         clock.now += seconds
 
     with TurnPrompt("Bot", 10, start="c", out=out, clock=clock) as prompt:
-        seconds = prompt.type_word("cat", [1.0, 0.25, 0.5], sleep=sleep)
+        seconds = prompt.type_word("cat", [1.0, 0.25, 0.25, 0.5], sleep=sleep)
     assert prompt.text == "cat"
-    assert pauses == [1.0, 0.25, 0.5]
-    assert seconds == 1.75
+    assert pauses == [1.0, 0.25, 0.25, 0.5]
+    assert seconds == 2.0
     assert ": Ca" in out.getvalue()
 
 
@@ -151,13 +176,12 @@ def test_countdown_can_show_something_else(clock, out):
     assert "\r +8 | Ann (C): cat" in out.getvalue()
 
 
-def test_the_countdown_and_given_letter_get_colors(clock, out):
+def test_the_countdown_gets_colors(clock, out):
     style.use_colors(True)
     with TurnPrompt("Ann", 10, start="c", tone=lambda elapsed: "yellow", out=out, clock=clock):
         pass
     drawn = out.getvalue()
     assert "\x1b[33m 10\x1b[0m" in drawn
-    assert "\x1b[1mC\x1b[0m" in drawn
     assert style.plain(drawn).startswith("\r 10 | Ann: C")
 
 

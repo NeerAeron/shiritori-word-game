@@ -51,9 +51,9 @@ CHALLENGE_TARGET = ChallengeGame.default_target_score
 HOW_TO_PLAY = f"""\
 How to play
 
-  Name a word that starts with the last letter of the previous word; that
-  letter is typed for you, and typing it again is skipped. Words must be
-  real, {MIN_WORD_LENGTH}+ letters, and not already played this game.
+  Name a word that starts with the last letter of the previous word. That
+  letter is filled in, so typing it is up to you; it turns bold if you do.
+  Words must be real, {MIN_WORD_LENGTH}+ letters, and not already played this game.
 
   Score a point per letter, plus a point per second left on the
   {CLASSIC_CLOCK}-second clock. Run out of time and you lose points.
@@ -365,7 +365,7 @@ def play(
                     continue
                 thinking = thinking_time(game, player.difficulty, word, rng)
                 with turn_prompt(game) as prompt:
-                    delays = typing_delays(word[1:], rng, thinking, player.difficulty.typing)
+                    delays = typing_delays(word, rng, thinking, player.difficulty.typing)
                     seconds = prompt.type_word(word, delays)
             else:
                 keyboard.discard_pending()

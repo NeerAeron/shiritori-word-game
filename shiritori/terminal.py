@@ -122,8 +122,9 @@ class TurnPrompt:
     the caller can print the outcome of the turn in its place. The countdown
     keeps going below zero; it is up to the caller what that means.
 
-    *start* is the start of the word, already typed and shown in capitals,
-    such as the letter it must begin with; Backspace can't remove it.
+    *start* is the letter the word must begin with. It is shown from the
+    start, in a capital, and counts whether or not the player types it. If
+    they do, it turns bold; Backspace can take it back to plain again.
 
     The countdown shows the seconds left, unless *countdown* is given: it
     turns the seconds taken so far into the text to show instead, such as
@@ -147,7 +148,8 @@ class TurnPrompt:
         self.start = start.lower()
         self._countdown = countdown
         self._tone = tone
-        self.text = self.start
+        self._start_typed = False  # Whether the player has typed the start too
+        self._rest = ""  # Everything typed after the start
         self._message = ""
         self._out = out or sys.stdout
         self._clock = clock
@@ -170,6 +172,11 @@ class TurnPrompt:
         self._out.write("\r" + " " * self._width + "\r")
         self._out.flush()
 
+    @property
+    def text(self) -> str:
+        """The word so far, start included."""
+        return self.start + self._rest
+
     def elapsed(self) -> float:
         """Seconds since the turn started."""
         return self._clock() - self._start
@@ -187,26 +194,24 @@ class TurnPrompt:
         *check* returns None for it; otherwise the problem *check* describes is
         shown next to the word and the player can carry on editing.
 
-        The start is typed already, so if the player types it anyway, that key
-        is skipped: "banana" and "anana" both play BANANA, and EEL takes "eel".
+        The start counts whether or not it's typed: "banana" and "anana" both
+        play BANANA, and EEL takes "eel".
         """
-        typed_any = False
         while True:
             key = read_key()
             if key in ENTER_KEYS:
                 problem = check(self.text)
                 if problem is None:
                     return self.text, self.elapsed()
-                self._update(self.text, problem)
+                self._update(problem)
             elif key in BACKSPACE_KEYS:
-                self._update(self.text[:-1] if len(self.text) > len(self.start) else self.text)
-                if self.text == self.start:
-                    typed_any = False
+                if self._rest:
+                    self._rest = self._rest[:-1]
+                else:
+                    self._start_typed = False
+                self._update()
             elif len(key) == 1 and key.isascii() and key.isalpha():
-                letter = key.lower()
-                if typed_any or letter != self.start[:1]:  # Skip typing the given letter again.
-                    self._update(self.text + letter)
-                typed_any = True
+                self._type(key.lower())
 
     def type_word(
         self,
@@ -214,21 +219,26 @@ class TurnPrompt:
         delays: Sequence[float],
         sleep: Callable[[float], None] = time.sleep,
     ) -> float:
-        """Type out the rest of *word* a letter at a time, and return the seconds taken.
+        """Type out *word* a letter at a time, and return the seconds taken.
 
-        *delays* holds the pause before each letter still to type, then the
-        pause before Enter.
+        *delays* holds the pause before each letter, then the pause before Enter.
         """
         *before_letters, before_enter = delays
-        for letter, delay in zip(word[len(self.text) :], before_letters, strict=True):
+        for letter, delay in zip(word, before_letters, strict=True):
             sleep(delay)
-            self._update(self.text + letter)
+            self._type(letter)
         sleep(before_enter)
         return self.elapsed()
 
-    def _update(self, text: str, message: str = "") -> None:
+    def _type(self, letter: str) -> None:
+        if not self._start_typed and not self._rest and letter == self.start:
+            self._start_typed = True
+        else:
+            self._rest += letter
+        self._update()
+
+    def _update(self, message: str = "") -> None:
         with self._lock:
-            self.text = text
             self._message = message
             self._render()
 
@@ -252,9 +262,10 @@ class TurnPrompt:
         # colors, since color codes take up no room on screen.
         shown, tone = self._state()
         field = f"{shown:>3}"
+        start = self.start.upper()
         line = (
             f"{paint(field, tone) if tone else field} {paint('|', 'dim')} {self.label}: "
-            f"{paint(self.start.upper(), 'bold')}{self.text[len(self.start) :]}"
+            f"{paint(start, 'bold') if self._start_typed else start}{self._rest}"
         )
         note = self._note(line_width() - width(line))
         # Pad with spaces to erase whatever is left of a longer previous line,
