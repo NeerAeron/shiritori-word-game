@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import random
 import sys
 import time
@@ -12,7 +13,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from . import __version__
-from .challenges import GRACE_SECONDS, ChallengeGame
+from .challenges import GRACE_SECONDS, NO_ROUND_BONUS, ChallengeGame
 from .computer import (
     DIFFICULTIES,
     ComputerPlayer,
@@ -23,6 +24,17 @@ from .computer import (
 )
 from .game import MIN_WORD_LENGTH, Game, Move, Player
 from .stats import Stats, StatsError, counts_toward_stats, format_stats, stats_file
+from .style import (
+    colors_supported,
+    line_width,
+    paint,
+    plain,
+    symbol,
+    symbols_supported,
+    use_colors,
+    use_symbols,
+    width,
+)
 from .terminal import BANNER, Keyboard, TurnPrompt
 from .words import WordList
 
@@ -39,22 +51,23 @@ CHALLENGE_TARGET = ChallengeGame.default_target_score
 HOW_TO_PLAY = f"""\
 How to play
 
-  Name a word that starts with the last letter of the previous word. Words
-  must be real, {MIN_WORD_LENGTH}+ letters, and not already played this game.
+  Name a word that starts with the last letter of the previous word. That
+  letter is filled in, so typing it is up to you; it turns bold if you do.
+  Words must be real, {MIN_WORD_LENGTH}+ letters, and not already played this game.
 
   Score a point per letter, plus a point per second left on the
   {CLASSIC_CLOCK}-second clock. Run out of time and you lose points.
-  "(5L + 8s)" means 5 letters and 8 seconds left.
+  "+13 | Neer: Tiger  (5L + 8s)" is 13 points: 5 letters, 8 seconds left.
 
   Reaching {TARGET} points ({CHALLENGE_TARGET} in challenge mode) ends the game once
   everyone has had the same number of turns. Highest score wins.
 
 Challenge mode
 
-  Every word must also meet a challenge that changes each turn, like "end
-  with S". Each turn has a round bonus too, like "+2 per S" (B in the
-  score), and each game has a bonus, like "include Q", that multiplies the
-  points of words that meet it. Vowels are A, E, I, O, and U.
+  Every word must also meet the turn's requirement, like "REQ: end with S".
+  Each turn has a round bonus too, like "+2 per S" (B in the score), and
+  each game has a bonus, like "x2.5: include Q", that multiplies the points
+  of words that meet it. Vowels are A, E, I, O, and U.
 
   Time points (the s in the score) start at +{CHALLENGE_TIME_POINTS} and drop 1 every 2
   seconds. At 0 there are {GRACE_SECONDS} seconds of grace, then they drop 1 a second.
@@ -127,11 +140,18 @@ def _to_int(text: str) -> int | None:
 
 def ask(prompt: str, parse: Callable[[str], T]) -> T:
     """Prompt until *parse* accepts the answer; *parse* raises ValueError to reject it."""
+    # input() shows its prompt on stderr, which may not take colors even if stdout does.
+    if not sys.stderr.isatty():
+        prompt = plain(prompt)
     while True:
         try:
             return parse(input(prompt).strip())
         except ValueError as error:
-            print(error)
+            print(paint(str(error), "red"))
+
+
+def _question(text: str, default: str) -> str:
+    return f"{paint(text, 'bold')} {paint(f'[{default}]', 'dim')}: "
 
 
 def _choose(prompt: str, options: Sequence[str]) -> str:
@@ -146,7 +166,7 @@ def _choose(prompt: str, options: Sequence[str]) -> str:
             raise ValueError(f"Choose 1-{len(options)} or type one of the names.")
         return options[number - 1]
 
-    return ask(f"{prompt}: {menu} [1]: ", parse)
+    return ask(f"{paint(prompt + ':', 'bold')} {menu} {paint('[1]', 'dim')}: ", parse)
 
 
 def ask_game_type() -> type[Game]:
@@ -163,7 +183,7 @@ def ask_players() -> list[Player]:
             raise ValueError(f"Enter a number from 1 to {MAX_PLAYERS}.")
         return number
 
-    count = ask(f"Number of players (1-{MAX_PLAYERS}) [1]: ", parse_count)
+    count = ask(_question(f"Number of players (1-{MAX_PLAYERS})", "1"), parse_count)
     players: list[Player] = []
 
     def parse_name(answer: str) -> str:
@@ -177,7 +197,9 @@ def ask_players() -> list[Player]:
         return name
 
     for number in range(1, count + 1):
-        players.append(Player(ask(f"Player {number} name [Player {number}]: ", parse_name)))
+        players.append(
+            Player(ask(_question(f"Player {number} name", f"Player {number}"), parse_name))
+        )
 
     if count == 1:
         players.append(ComputerPlayer(COMPUTER_NAME, difficulty=ask_difficulty()))
@@ -189,8 +211,39 @@ def ask_difficulty() -> Difficulty:
     return DIFFICULTIES[_choose("Difficulty", list(DIFFICULTIES))]
 
 
+def capitalized(word: str) -> str:
+    return word[:1].upper() + word[1:]
+
+
+def event(message: str, mark_style: str = "yellow") -> str:
+    """A line announcing something, such as the last round, marked so it stands out."""
+    return f"{paint(symbol('»', '>'), mark_style)} {paint(message, 'bold')}"
+
+
 def scoreboard(players: Sequence[Player]) -> str:
-    return " | ".join(f"{player.name}: {player.score}" for player in players)
+    """Everyone's score, such as "Neer 43 · Computer 34", with the leader in bold."""
+    best = max(player.score for player in players)
+    has_leader = len({player.score for player in players}) > 1
+
+    def entry(player: Player) -> str:
+        leads = has_leader and player.score == best
+        return f"{player.name} {paint(str(player.score), 'bold') if leads else player.score}"
+
+    entries = [entry(player) for player in players]
+    separator = symbol(" · ", " | ")
+    trail = separator.rstrip()  # Ends a line that continues below
+    indent = " " * 6  # Under the names on the line above
+    lines, line = [], entries[0]
+    for position, entry in enumerate(entries[1:], 2):
+        joined = line + paint(separator, "dim") + entry
+        room_for_trail = len(trail) if position < len(entries) else 0
+        if len(indent) + width(joined) + room_for_trail > line_width():
+            lines.append(line + paint(trail, "dim"))
+            line = entry
+        else:
+            line = joined
+    lines.append(line)
+    return "\n".join(indent + line for line in lines)
 
 
 def breakdown(move: Move) -> str:
@@ -203,19 +256,50 @@ def breakdown(move: Move) -> str:
     if move.round_bonus:
         parts += f" + {move.round_bonus}B"
     sign = "+" if move.time_bonus >= 0 else "-"
-    text = f"({parts} {sign} {abs(move.time_bonus)}s)"
+    text = paint(f"({parts} {sign} {abs(move.time_bonus)}s)", "dim")
     if move.multiplier > 1:
-        text += f" x{move.multiplier:g}"
+        text += " " + paint(f"x{move.multiplier:g}", "magenta")
     return text
+
+
+def result_line(move: Move) -> str:
+    """What a word scored, such as "+22 | Neer: Fort  (4L + 9s) x1.7"."""
+    tone = "green" if move.points > 0 else "red" if move.points < 0 else None
+    points = f"{move.points:+d}".rjust(3)
+    word = paint(capitalized(move.word), "bold")
+    return (
+        f"{paint(points, tone) if tone else points} {paint('|', 'dim')} "
+        f"{move.player.name}: {word}  {breakdown(move)}"
+    )
+
+
+def requirement_lines(game: ChallengeGame) -> list[str]:
+    """The turn's requirement and bonuses, on one line if they fit."""
+    bonuses = (
+        [] if game.round_bonus is NO_ROUND_BONUS else [paint(game.round_bonus.text, "magenta")]
+    )
+    bonuses.append(f"{paint(f'x{game.multiplier:g}', 'magenta')}: {game.bonus.text}")
+    requirement = paint(f"REQ: {game.challenge.text}", "bold")
+    one_line = f"{requirement} {paint('| Bonuses:', 'dim')} {', '.join(bonuses)}"
+    if width(one_line) <= line_width():
+        return [one_line]
+    return [requirement, f"     {paint('Bonuses:', 'dim')} {', '.join(bonuses)}"]
+
+
+def show_header(game: Game) -> None:
+    print()
+    print(f"{paint(game.mode.title() + ' mode:', 'bold')} playing to {game.target_score} points")
 
 
 def show_bonus(game: ChallengeGame, sleep: Callable[[float], None], seconds: int = 5) -> None:
     """Announce the game bonus, and give players a moment to read it."""
-    print(f"\n  GAME BONUS x{game.multiplier:g}: {game.bonus.text}\n")
+    print(
+        f"{paint(f'GAME BONUS x{game.multiplier:g}', 'magenta')}: {paint(game.bonus.text, 'bold')}"
+    )
     for left in range(seconds, 0, -1):
-        print(f"\r  Starting in {left}...", end="", flush=True)
+        print("\r" + paint(f"Starting in {left}...", "dim"), end="", flush=True)
         sleep(1)
-    print("\r" + " " * 24 + "\r", end="", flush=True)
+    print("\r" + " " * len(f"Starting in {seconds}...") + "\r", end="", flush=True)
 
 
 def countdown(game: Game) -> Callable[[float], str] | None:
@@ -223,6 +307,34 @@ def countdown(game: Game) -> Callable[[float], str] | None:
     if isinstance(game, ChallengeGame):
         return lambda elapsed: f"{game.time_points(elapsed):+d}"
     return None
+
+
+def countdown_tone(game: Game) -> Callable[[float], str | None]:
+    """The countdown's color: yellow when time is nearly up, red once points are being lost."""
+    if isinstance(game, ChallengeGame):
+
+        def tone(elapsed: float) -> str | None:
+            points = game.time_points(elapsed)
+            return "red" if points < 0 else "yellow" if points <= 2 else None
+
+    else:
+
+        def tone(elapsed: float) -> str | None:
+            left = math.ceil(game.turn_time - elapsed)
+            return "red" if left <= 0 else "yellow" if left <= 3 else None
+
+    return tone
+
+
+def turn_prompt(game: Game) -> TurnPrompt:
+    """The live prompt for the current player, with the word's first letter already typed."""
+    return TurnPrompt(
+        game.current_player.name,
+        game.turn_time,
+        start=game.letter,
+        countdown=countdown(game),
+        tone=countdown_tone(game),
+    )
 
 
 def play(
@@ -235,73 +347,70 @@ def play(
     rng = rng or random.Random()
     keyboard = keyboard or Keyboard()
     announced = False
+    show_header(game)
     if isinstance(game, ChallengeGame):
         show_bonus(game, sleep)
-    else:
-        print()
     with keyboard:
         while (winner := game.winner) is None:
+            print()
             player = game.current_player
-            label = f"{player.name} ({game.letter})"
             if isinstance(game, ChallengeGame):
-                print(
-                    f"  Challenge: {game.challenge.text} | {game.round_bonus.text}"
-                    f" | x{game.multiplier:g}: {game.bonus.text}"
-                )
+                print("\n".join(requirement_lines(game)))
 
             if isinstance(player, ComputerPlayer):
                 word = choose_word(game, player.difficulty, rng)
                 if word is None:
                     game.skip()
-                    print(f"{player.name} is stumped! New letter: {game.letter}")
+                    print(event(f"{player.name} is stumped! New letter: {game.letter}"))
                     continue
                 thinking = thinking_time(game, player.difficulty, word, rng)
-                with TurnPrompt(label, game.turn_time, countdown=countdown(game)) as prompt:
+                with turn_prompt(game) as prompt:
                     delays = typing_delays(word, rng, thinking, player.difficulty.typing)
                     seconds = prompt.type_word(word, delays)
             else:
                 keyboard.discard_pending()
-                with TurnPrompt(label, game.turn_time, countdown=countdown(game)) as prompt:
+                with turn_prompt(game) as prompt:
                     word, seconds = prompt.read_word(game.check_word, keyboard.read_key)
 
-            points = game.play(word, seconds)
-            print(f"{label}: {word}  {points:+d}  {breakdown(game.moves[-1])}")
-            print(f"    {scoreboard(game.players)}")
+            game.play(word, seconds)
+            print(result_line(game.moves[-1]))
+            print(scoreboard(game.players))
 
             if game.final_round and game.winner is None:
                 if game.round_complete:
-                    print("Tied! One more round.")
+                    print(event("Tied! One more round."))
                 elif not announced:
-                    print(f"{player.name} reached {game.target_score}! Last round.")
+                    print(event(f"{player.name} reached {game.target_score}! Last round."))
                     announced = True
     return winner
 
 
 def record_stats(game: Game, path: Path) -> None:
     """Add a finished game to the saved stats, and announce anything new."""
+    # Indented to sit under the winner's name on the line above.
     if not counts_toward_stats(game):
-        print("Custom rules, so this game isn't in your stats.")
+        print("  " + paint("Custom rules, so this game isn't in your stats.", "dim"))
         return
     try:
         stats = Stats.load(path)
         report = stats.record_game(game, date.today())
         stats.save(path)
     except StatsError as error:
-        print(f"Stats not saved. {error}")
+        print(f"  {paint('Stats not saved.', 'red')} {error}")
         return
 
     if report.high_score_ranks:
         rank = report.high_score_ranks[0]
         best = stats.high_scores[game.mode][rank - 1]
-        print(f"New high score #{rank}: {best.word} ({best.points})")
+        label = paint(f"New high score #{rank}:", "green")
+        print(f"  {label} {capitalized(best.word)} ({best.points})")
     if report.longest_word:
-        word = report.longest_word
-        print(f"New longest word: {word}")
+        print(f"  {paint('New longest word:', 'green')} {capitalized(report.longest_word)}")
     for player in game.players:
         if isinstance(player, ComputerPlayer):
             record = stats.records[game.mode][player.difficulty.name]
-            print(f"Record vs {player.difficulty.name}: {record.won} won, {record.lost} lost")
-    print(f"All stats: {program_name()} --stats")
+            print(f"  Record vs {player.difficulty.name}: {record.won} won, {record.lost} lost")
+    print("  " + paint(f"All stats: {program_name()} --stats", "dim"))
 
 
 def show_stats(path: Path) -> int:
@@ -311,7 +420,7 @@ def show_stats(path: Path) -> int:
         print(error, file=sys.stderr)
         return 1
     print(format_stats(stats))
-    print(f"\nStats file: {path}")
+    print("\n" + paint(f"Stats file: {path}", "dim"))
     return 0
 
 
@@ -347,11 +456,36 @@ def new_game(game_type: type[Game], players: list[Player], args: argparse.Namesp
     return game_type(players, WordList.default(), **rules)
 
 
+def rules() -> str:
+    """How to play, with the headings in bold."""
+    return "\n".join(
+        paint(line, "bold") if line and not line.startswith(" ") else line
+        for line in HOW_TO_PLAY.splitlines()
+    )
+
+
+def show_banner() -> None:
+    for line in BANNER.splitlines():
+        print(paint(line, "magenta"))
+    print()
+    print("The word-chain game, by Neer")
+    print(paint(f"How to play: {program_name()} --rules", "dim"))
+    print()
+
+
+def show_winner(winner: Player) -> None:
+    mark_style = "dim" if isinstance(winner, ComputerPlayer) else "green"
+    print()
+    print(event(f"{winner.name} wins with {winner.score} points!", mark_style))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    use_colors(colors_supported(sys.stdout))
+    use_symbols(symbols_supported(sys.stdout))
     args = parse_args(argv)
     path = stats_file()
     if args.rules:
-        print(HOW_TO_PLAY)
+        print(rules())
         return 0
     if args.stats:
         return show_stats(path)
@@ -361,8 +495,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Shiritori needs an interactive terminal to play in.", file=sys.stderr)
         return 1
 
-    print(BANNER)
-    print(f"  How to play: {program_name()} --rules\n")
+    show_banner()
     try:
         game_type = ask_game_type()
         players = ask_players()
@@ -372,6 +505,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("\nThanks for playing!")
         return 130
 
-    print(f"\n{winner.name} wins with {winner.score} points!")
+    show_winner(winner)
     record_stats(game, path)
     return 0

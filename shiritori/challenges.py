@@ -320,7 +320,7 @@ class ChallengeGame(Game):
     def check_word(self, word: str) -> str | None:
         problem = super().check_word(word)
         if problem is None and not self.challenge.test(word.lower()):
-            return "doesn't meet the challenge"
+            return "doesn't meet the REQ"
         return problem
 
     def multiplier_for(self, word: str) -> float:

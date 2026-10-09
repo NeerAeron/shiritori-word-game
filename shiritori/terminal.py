@@ -11,6 +11,8 @@ from collections.abc import Callable, Sequence
 from types import ModuleType
 from typing import TextIO
 
+from .style import line_width, paint, width
+
 if sys.platform != "win32":
     import select
     import termios
@@ -20,8 +22,6 @@ BANNER = r"""
 |     __|  |--.|__|.----.|__|  |_.-----.----.|__|
 |__     |     ||  ||   _||  |   _|  _  |   _||  |
 |_______|__|__||__||__|  |__|____|_____|__|  |__|
-
-  The word-chain game, by Neer
 """
 
 # Enter arrives as "\n" or "\r", and Backspace as "\x7f" or "\x08", depending on
@@ -115,16 +115,21 @@ Keyboard = WindowsKeyboard if sys.platform == "win32" else PosixKeyboard
 
 
 class TurnPrompt:
-    """A single-line prompt with a live countdown, such as `  7 | Neer (K): kit`.
+    """A single-line prompt with a live countdown, such as `  7 | Neer: Kit`.
 
     Use it as a context manager: the clock starts on entry and a background
     thread redraws the countdown as it ticks. On exit the line is cleared so
     the caller can print the outcome of the turn in its place. The countdown
     keeps going below zero; it is up to the caller what that means.
 
+    *start* is the letter the word must begin with. It is shown from the
+    start, in a capital, and counts whether or not the player types it. If
+    they do, it turns bold; Backspace can take it back to plain again.
+
     The countdown shows the seconds left, unless *countdown* is given: it
     turns the seconds taken so far into the text to show instead, such as
-    the points a word would score now.
+    the points a word would score now. *tone*, if given, turns the seconds
+    taken so far into the countdown's color, such as "red" once time is up.
     """
 
     def __init__(
@@ -132,14 +137,19 @@ class TurnPrompt:
         label: str,
         seconds: int,
         *,
+        start: str = "",
         countdown: Callable[[float], str] | None = None,
+        tone: Callable[[float], str | None] | None = None,
         out: TextIO | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.label = label
         self.seconds = seconds
+        self.start = start.lower()
         self._countdown = countdown
-        self.text = ""
+        self._tone = tone
+        self._start_typed = False  # Whether the player has typed the start too
+        self._rest = ""  # Everything typed after the start
         self._message = ""
         self._out = out or sys.stdout
         self._clock = clock
@@ -162,6 +172,11 @@ class TurnPrompt:
         self._out.write("\r" + " " * self._width + "\r")
         self._out.flush()
 
+    @property
+    def text(self) -> str:
+        """The word so far, start included."""
+        return self.start + self._rest
+
     def elapsed(self) -> float:
         """Seconds since the turn started."""
         return self._clock() - self._start
@@ -178,6 +193,9 @@ class TurnPrompt:
         Only the letters a-z are accepted. Pressing Enter submits the word if
         *check* returns None for it; otherwise the problem *check* describes is
         shown next to the word and the player can carry on editing.
+
+        The start counts whether or not it's typed: "banana" and "anana" both
+        play BANANA, and EEL takes "eel".
         """
         while True:
             key = read_key()
@@ -185,11 +203,15 @@ class TurnPrompt:
                 problem = check(self.text)
                 if problem is None:
                     return self.text, self.elapsed()
-                self._update(self.text, problem)
+                self._update(problem)
             elif key in BACKSPACE_KEYS:
-                self._update(self.text[:-1])
+                if self._rest:
+                    self._rest = self._rest[:-1]
+                else:
+                    self._start_typed = False
+                self._update()
             elif len(key) == 1 and key.isascii() and key.isalpha():
-                self._update(self.text + key.lower())
+                self._type(key.lower())
 
     def type_word(
         self,
@@ -197,43 +219,67 @@ class TurnPrompt:
         delays: Sequence[float],
         sleep: Callable[[float], None] = time.sleep,
     ) -> float:
-        """Type *word* out a letter at a time, and return the seconds taken.
+        """Type out *word* a letter at a time, and return the seconds taken.
 
         *delays* holds the pause before each letter, then the pause before Enter.
         """
         *before_letters, before_enter = delays
         for letter, delay in zip(word, before_letters, strict=True):
             sleep(delay)
-            self._update(self.text + letter)
+            self._type(letter)
         sleep(before_enter)
         return self.elapsed()
 
-    def _update(self, text: str, message: str = "") -> None:
+    def _type(self, letter: str) -> None:
+        if not self._start_typed and not self._rest and letter == self.start:
+            self._start_typed = True
+        else:
+            self._rest += letter
+        self._update()
+
+    def _update(self, message: str = "") -> None:
         with self._lock:
-            self.text = text
             self._message = message
             self._render()
 
-    def _shown(self) -> str:
-        if self._countdown:
-            return self._countdown(self.elapsed())
-        return str(self.remaining())
+    def _state(self) -> tuple[str, str | None]:
+        """The countdown's text and color, both from one reading of the clock."""
+        elapsed = self.elapsed()
+        seconds_left = str(math.ceil(self.seconds - elapsed))
+        shown = self._countdown(elapsed) if self._countdown else seconds_left
+        return shown, self._tone(elapsed) if self._tone else None
 
     def _tick(self) -> None:
-        shown = self._shown()
+        state = self._state()
         while not self._done.wait(0.05):
-            if self._shown() != shown:
+            if self._state() != state:
                 with self._lock:
-                    shown = self._shown()
+                    state = self._state()
                     self._render()
 
     def _render(self) -> None:
-        # Only call this while holding self._lock.
-        line = f"{self._shown():>3} | {self.label}: {self.text}"
-        note = f"  ({self._message})" if self._message else ""
+        # Only call this while holding self._lock. Widths are measured without
+        # colors, since color codes take up no room on screen.
+        shown, tone = self._state()
+        field = f"{shown:>3}"
+        start = self.start.upper()
+        line = (
+            f"{paint(field, tone) if tone else field} {paint('|', 'dim')} {self.label}: "
+            f"{paint(start, 'bold') if self._start_typed else start}{self._rest}"
+        )
+        note = self._note(line_width() - width(line))
         # Pad with spaces to erase whatever is left of a longer previous line,
         # then step back so the cursor sits right after the typed text.
-        pad = max(0, self._width - len(line + note))
-        self._out.write("\r" + line + note + " " * pad + "\b" * (pad + len(note)))
+        shown_width = width(line) + width(note)
+        pad = max(0, self._width - shown_width)
+        self._out.write("\r" + line + note + " " * pad + "\b" * (pad + width(note)))
         self._out.flush()
-        self._width = len(line + note)
+        self._width = shown_width
+
+    def _note(self, room: int) -> str:
+        """The problem with the word, cut short at a word or left out to fit in *room* columns."""
+        message = self._message
+        if len(message) + 4 > room:  # The note adds two spaces and brackets.
+            cut = message[: max(0, room - 4) + 1]
+            message = cut.rpartition(" ")[0].rstrip() if " " in cut else ""
+        return "  " + paint(f"({message})", "red") if message else ""

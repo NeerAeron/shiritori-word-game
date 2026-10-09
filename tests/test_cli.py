@@ -1,8 +1,9 @@
 import random
+import re
 
 import pytest
 
-from shiritori import __version__, cli
+from shiritori import __version__, cli, style
 from shiritori.challenges import NO_ROUND_BONUS, Challenge, ChallengeGame, RoundBonus
 from shiritori.computer import DIFFICULTIES, ComputerPlayer
 from shiritori.game import Game, Move, Player
@@ -163,12 +164,13 @@ def test_computers_play_until_someone_wins(instant_computer, capsys, game_type):
     assert winner.score == max(player.score for player in players)
     assert game.round_complete  # both players had the same number of turns
     output = capsys.readouterr().out
-    assert f"Hal: {players[0].score} | Eve: {players[1].score}" in output
-    assert ("Challenge:" in output) == (game_type is ChallengeGame)
+    assert f"      Hal {players[0].score} · Eve {players[1].score}\n" in output
+    assert ("REQ:" in output) == (game_type is ChallengeGame)
+    assert "\x1b" not in output  # no colors when the output isn't a terminal
 
 
 def test_play_with_people_at_the_keyboard(capsys):
-    keyboard = FakeKeyboard("xyz\n\x7f\x7f\x7fapple\negg\ngiraffe\nelephant\n")
+    keyboard = FakeKeyboard("xyz\n\x7f\x7f\x7fpple\ngg\niraffe\nlephant\n")
     words = WordList(["apple", "egg", "giraffe", "elephant"])
     game = Game([Player("Ann"), Player("Bob")], words, target_score=30)
     game.letter = "A"
@@ -179,12 +181,12 @@ def test_play_with_people_at_the_keyboard(capsys):
     assert keyboard.keys == []
     assert keyboard.discarded == 4  # before each person's turn
     output = capsys.readouterr().out
-    assert "xyz  (must start with A)" in output
-    assert "Ann (A): apple  +15  (5L + 10s)" in output
-    assert "Bob (E): egg  +13" in output
-    assert "Ann (G): giraffe  +17" in output
-    assert "Ann reached 30! Last round." in output
-    assert "Bob (E): elephant  +18" in output  # Bob still gets his turn: 31 to Ann's 32
+    assert "Axyz  (not in the dictionary)" in output  # the A is typed for you
+    assert "+15 | Ann: Apple  (5L + 10s)\n      Ann 15 · Bob 0\n" in output
+    assert "+13 | Bob: Egg" in output
+    assert "+17 | Ann: Giraffe" in output
+    assert "» Ann reached 30! Last round." in output
+    assert "+18 | Bob: Elephant" in output  # Bob still gets his turn: 31 to Ann's 32
 
 
 def test_a_tie_for_the_lead_plays_another_round(capsys):
@@ -197,8 +199,8 @@ def test_a_tie_for_the_lead_plays_another_round(capsys):
 
     assert winner.name == "Bob"  # 32 all after two rounds, then 47 to 48
     output = capsys.readouterr().out
-    assert "Tied! One more round." in output
-    assert "Bob (R): rabbit  +16" in output
+    assert "» Tied! One more round." in output
+    assert "+16 | Bob: Rabbit" in output
 
 
 def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
@@ -206,7 +208,7 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     per_l = RoundBonus("+3 per L", lambda word: 3 * word.count("l"))
     monkeypatch.setattr(ChallengeGame, "_pick_challenge", lambda self: end_with_e)
     monkeypatch.setattr(ChallengeGame, "_pick_round_bonus", lambda self: per_l)
-    keyboard = FakeKeyboard("ant\n\x7f\x7f\x7fapple\neagle\nedge\nelse\n")
+    keyboard = FakeKeyboard("nt\n\x7f\x7fpple\nagle\ndge\nlse\n")
     words = WordList(["ant", "apple", "eagle", "edge", "else"])
     game = ChallengeGame([Player("Ann"), Player("Bob")], words, target_score=40)
     game.letter = "A"
@@ -216,15 +218,15 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
 
     assert winner.name == "Bob"  # 53 to 46, thanks to his last turn
     output = capsys.readouterr().out
-    assert "GAME BONUS x2: include G" in output
+    assert "Challenge mode: playing to 40 points\nGAME BONUS x2: include G\n" in output
     assert "Starting in 1..." in output
-    assert "  Challenge: end with E | +3 per L | x2: include G" in output
-    assert "+10 | Ann (A): apple" in output  # the countdown shows time points
-    assert "ant  (doesn't meet the challenge)" in output
-    assert "Ann (A): apple  +18  (5L + 3B + 10s)\n" in output
-    assert "Bob (E): eagle  +36  (5L + 3B + 10s) x2" in output
-    assert "Ann (E): edge  +28  (4L + 10s) x2" in output
-    assert "Bob (E): else  +17  (4L + 3B + 10s)\n" in output
+    assert "\nREQ: end with E | Bonuses: +3 per L, x2: include G\n" in output
+    assert "+10 | Ann: Apple" in output  # the countdown shows time points
+    assert "Ant  (doesn't meet the REQ)" in output
+    assert "+18 | Ann: Apple  (5L + 3B + 10s)\n" in output
+    assert "+36 | Bob: Eagle  (5L + 3B + 10s) x2\n" in output
+    assert "+28 | Ann: Edge  (4L + 10s) x2\n" in output
+    assert "+17 | Bob: Else  (4L + 3B + 10s)\n" in output
 
 
 def test_main_needs_a_terminal(monkeypatch, capsys):
@@ -288,7 +290,7 @@ def test_record_stats_saves_the_game_and_announces_news(stats_file, capsys):
     assert [entry.word for entry in stats.high_scores["classic"]] == ["giraffe", "apple"]
     assert stats.words == {"apple": 1, "giraffe": 1}
     output = capsys.readouterr().out
-    assert "New high score #1: giraffe (17)" in output
+    assert "  New high score #1: Giraffe (17)" in output
     assert "Record vs hard: 1 won, 0 lost" in output
     assert "New longest word" not in output  # nothing to beat yet
     assert f"All stats: {cli.program_name()} --stats" in output
@@ -299,7 +301,7 @@ def test_record_stats_announces_a_new_longest_word(stats_file, capsys):
     cli.record_stats(finished_game_vs_computer(ChallengeGame), stats_file)
 
     output = capsys.readouterr().out
-    assert "New longest word: giraffe" in output
+    assert "  New longest word: Giraffe" in output
     assert "Record vs hard: 1 won, 0 lost" in output
     assert Stats.load(stats_file).records["challenge"]["hard"] == Record(played=1, won=1)
 
@@ -412,7 +414,7 @@ def test_challenge_mode_shows_the_bonus_then_counts_down(capsys):
     output = capsys.readouterr().out
     assert f"GAME BONUS x{game.multiplier:g}: {game.bonus.text}" in output
     assert [line for line in output.split("\r") if "Starting in" in line] == [
-        f"  Starting in {n}..." for n in (5, 4, 3, 2, 1)
+        f"Starting in {n}..." for n in (5, 4, 3, 2, 1)
     ]
     assert pauses == [1] * 5
 
@@ -428,3 +430,132 @@ def test_challenge_mode_shows_the_bonus_then_counts_down(capsys):
 )
 def test_breakdown_shows_how_the_points_add_up(move, text):
     assert cli.breakdown(move) == text
+
+
+@pytest.mark.parametrize(
+    ("game_type", "elapsed", "tone"),
+    [
+        (Game, 0, None),
+        (Game, 6, None),  # 4 seconds left
+        (Game, 7, "yellow"),
+        (Game, 9.5, "yellow"),
+        (Game, 10, "red"),
+        (Game, 12, "red"),
+        (ChallengeGame, 0, None),
+        (ChallengeGame, 14, None),  # +3
+        (ChallengeGame, 16, "yellow"),  # +2
+        (ChallengeGame, 22, "yellow"),  # 0, in the grace period
+        (ChallengeGame, 25, "red"),  # -1
+    ],
+)
+def test_the_countdown_turns_yellow_then_red(game_type, elapsed, tone):
+    game = game_type([Player("Ann"), Player("Bob")], WordList.default(), rng=random.Random(0))
+    assert cli.countdown_tone(game)(elapsed) == tone
+
+
+def challenge_turn(challenge, round_bonus=None, bonus="include Q", multiplier=1.9):
+    game = ChallengeGame([Player("Ann"), Player("Bob")], WordList.default(), rng=random.Random(0))
+    game.challenge = Challenge(challenge, lambda word: True)
+    game.round_bonus = round_bonus or RoundBonus("+7 per X", lambda word: 0)
+    game.bonus, game.multiplier = Challenge(bonus, lambda word: False), multiplier
+    return game
+
+
+def test_the_requirement_and_bonuses_share_a_line():
+    game = challenge_turn("end with N", bonus="four consonants in a row")
+    assert cli.requirement_lines(game) == [
+        "REQ: end with N | Bonuses: +7 per X, x1.9: four consonants in a row"
+    ]
+    game.round_bonus = NO_ROUND_BONUS
+    assert cli.requirement_lines(game) == [
+        "REQ: end with N | Bonuses: x1.9: four consonants in a row"
+    ]
+
+
+def test_a_long_requirement_puts_the_bonuses_on_their_own_line():
+    animal = "hide an animal (ANT, BAT, CAT, COW, DOG, HEN, OWL, PIG, RAT)"
+    game = challenge_turn(
+        animal, RoundBonus("+4 per vowel pair", lambda word: 0), "two double letters"
+    )
+    lines = cli.requirement_lines(game)
+    assert lines == [
+        f"REQ: {animal}",
+        "     Bonuses: +4 per vowel pair, x1.9: two double letters",
+    ]
+    assert all(len(line) <= 79 for line in lines)
+
+
+def test_the_requirement_line_gets_colors():
+    style.use_colors(True)
+    line = cli.requirement_lines(challenge_turn("end with N"))[0]
+    assert line.startswith("\x1b[1mREQ: end with N\x1b[0m \x1b[2m| Bonuses:\x1b[0m")
+    assert "\x1b[35m+7 per X\x1b[0m, \x1b[35mx1.9\x1b[0m: include Q" in line
+
+
+def test_the_scoreboard_lists_everyone_in_seating_order():
+    players = [Player("Neer", 12), Player("Computer", 0)]
+    assert cli.scoreboard(players) == "      Neer 12 · Computer 0"
+    style.use_symbols(False)
+    assert cli.scoreboard(players) == "      Neer 12 | Computer 0"
+
+
+@pytest.mark.parametrize(
+    ("scores", "bold"),
+    [((12, 0, 5), [12]), ((12, 12, 5), [12, 12]), ((7, 7, 7), [])],
+)
+def test_the_scoreboard_shows_the_leaders_in_bold(scores, bold):
+    style.use_colors(True)
+    board = cli.scoreboard([Player(name, score) for name, score in zip("ABC", scores, strict=True)])
+    assert [int(n) for n in re.findall(r"\x1b\[1m(\d+)\x1b\[0m", board)] == bold
+
+
+def test_a_long_scoreboard_wraps_under_the_names():
+    players = [Player(f"{name * 18}{n}", 100 + n) for n, name in enumerate("ABCD")]
+    lines = cli.scoreboard(players).split("\n")
+    assert len(lines) == 2
+    assert all(line.startswith("      ") and len(line) <= 79 for line in lines)
+    assert lines[0].endswith(" ·")
+
+
+@pytest.mark.parametrize("columns", ["80", "50", "40"])
+def test_a_wrapped_scoreboard_never_runs_past_the_edge(monkeypatch, columns):
+    monkeypatch.setenv("COLUMNS", columns)
+    names = [("A" * 20, 100), ("B" * 20, 101), ("C" * 15, 102), ("Dot", 5)]
+    for count in range(2, 5):
+        for cut in range(1, 21):
+            players = [Player(name[:cut] or name, score) for name, score in names[:count]]
+            for line in cli.scoreboard(players).split("\n"):
+                assert len(line) <= style.line_width()
+
+
+def test_breakdown_colors_only_the_multiplier():
+    style.use_colors(True)
+    move = Move(Player("Neer"), "dusty", 37, 1.9, 9, 2)
+    assert cli.breakdown(move) == "\x1b[2m(5L + 2B + 9s)\x1b[0m \x1b[35mx1.9\x1b[0m"
+
+
+@pytest.mark.parametrize(
+    ("points", "start"),
+    [(22, "\x1b[32m+22\x1b[0m"), (-4, "\x1b[31m -4\x1b[0m"), (0, " +0")],
+)
+def test_result_lines_color_the_points(points, start):
+    style.use_colors(True)
+    line = cli.result_line(Move(Player("Neer"), "fort", points, time_bonus=points - 4))
+    assert line.startswith(start + " \x1b[2m|\x1b[0m Neer: \x1b[1mFort\x1b[0m  ")
+
+
+@pytest.mark.parametrize(
+    ("winner", "mark"), [(Player("Neer"), "32"), (ComputerPlayer("Computer"), "2")]
+)
+def test_the_winner_mark_only_celebrates_people(capsys, winner, mark):
+    style.use_colors(True)
+    cli.show_winner(winner)
+    assert capsys.readouterr().out.startswith(f"\n\x1b[{mark}m»\x1b[0m \x1b[1m{winner.name} wins")
+
+
+def test_rules_headings_are_bold_only_with_colors():
+    assert "\x1b" not in cli.rules()
+    style.use_colors(True)
+    assert "\x1b[1mHow to play\x1b[0m" in cli.rules()
+    assert "\x1b[1mChallenge mode\x1b[0m" in cli.rules()
+    assert "  Name a word" in cli.rules()

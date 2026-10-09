@@ -7,24 +7,24 @@ last one ended. This English version runs in your terminal. Race the clock
 against the computer, or up to 4 friends on one keyboard.
 
 ```text
-Neer (T): tiger  +13  (5L + 8s)
-    Neer: 13 | Computer: 0
-Computer (R): rhubarb  +16  (7L + 9s)
-    Neer: 13 | Computer: 16
-  8 | Neer (B): bana
++13 | Neer: Tiger  (5L + 8s)
+      Neer 13 · Computer 0
+
++16 | Computer: Rhubarb  (7L + 9s)
+      Neer 13 · Computer 16
+
+  8 | Neer: Bana
 ```
 
 ## Features
 
-- **Two modes:** classic, and challenge mode with new challenges and bonuses every turn
+- **Two modes:** classic, and challenge mode with new requirements and bonuses every turn
 - **Five computer levels**, from beginner to impossible
-- **Fair turns:** everyone gets the same number of turns
-- **Saved stats:** records, high scores, favorite and longest words
-- **No dependencies:** just Python 3.10+, on Linux, macOS, or Windows
+- **Fair turns** and **saved stats** (records, high scores, favorite words)
+- **A few colors** where your terminal supports them (`NO_COLOR` turns them off)
+- **No dependencies:** Python 3.10+ on Linux, macOS, or Windows
 
 ## Install
-
-Play straight from a folder:
 
 ```sh
 git clone https://github.com/NeerAeron/shiritori-word-game.git shiritori
@@ -32,48 +32,39 @@ cd shiritori
 python play.py
 ```
 
-Or install the `shiritori` command:
-
-```sh
-pipx install git+https://github.com/NeerAeron/shiritori-word-game.git
-shiritori
-```
+Or install the `shiritori` command with
+`pipx install git+https://github.com/NeerAeron/shiritori-word-game.git`.
 
 ## How to play
 
-- Name a word that starts with the last letter of the previous word.
-- Words must be real, 3+ letters, A–Z only, and not already played this game.
-- **Score:** a point per letter, plus a point per second left on the 10-second
-  clock, shown as `(5L + 8s)`. Run out of time and you lose a point per second over.
+- Name a real word (3+ letters, not yet played) that starts with the last
+  letter of the previous word. That letter is filled in, so typing it is
+  optional; it turns bold if you do.
+- **Score:** a point per letter plus a point per second left on the 10-second
+  clock, shown as `(5L + 8s)`. Run out of time and you lose a point a second.
 - **Win:** reach 100 points (150 in challenge mode). The round is played out
-  so everyone gets the same number of turns, then the highest score wins.
+  so everyone gets the same number of turns.
 
-Type a word and press **Enter**. **Backspace** fixes mistakes, **Ctrl+C**
-quits. Run `python play.py --rules` for a refresher in the terminal.
+**Enter** submits, **Backspace** fixes mistakes, **Ctrl+C** quits, and
+`python play.py --rules` explains it all in the terminal.
 
 ## Challenge mode
 
-Every word must also meet a challenge that changes each turn, such as *end
-with S*, *no letter E*, or *hide an animal (ANT, BAT, CAT…)*. There are 119,
-each leaving at least 100 words to choose from, and harder computer levels
-get harder ones. Vowels are A, E, I, O, U.
+Every word must also meet a requirement (REQ) that changes each turn, such as
+*end with S* or *hide an animal (ANT, BAT, CAT…)*. Harder computer levels get
+harder ones. Vowels are A, E, I, O, U.
 
-Two bonuses add to your score:
-
-- **Round bonus:** a new one each turn, such as *+2 per S* or *+4 per double
-  letter*. Every letter or pair counts, so *assess* earns +8 from *+2 per S*.
-  It shows up as `B` in the score.
-- **Game bonus:** one per game, such as *include Q* or *U is the only vowel*.
-  Words that meet it score 1.5x–3x, and the harder the bonus, the more it pays.
+- **Round bonus:** new each turn and stacking, such as *+2 per S* (*assess*
+  earns +8). Shown as `B`.
+- **Game bonus:** one per game, such as *include Q*. Words that meet it score
+  1.5x–3x, more for harder bonuses.
+- **Time points** (`s`) start at +10 and drop 1 every 2 seconds, with 4
+  seconds of grace at 0 before they go negative.
 
 ```text
-  Challenge: include Y | +2 per S | x2.3: U is the only vowel
-Neer (D): dusty  +37  (5L + 2B + 9s) x2.3
+REQ: include Y | Bonuses: +2 per S, x2.3: U is the only vowel
++37 | Neer: Dusty  (5L + 2B + 9s) x2.3
 ```
-
-Time points (the `s` in the score) start at +10 and drop 1 every 2 seconds.
-At 0 there are 4 seconds of grace before they go negative. Challenge mode
-plays to 150.
 
 ## Computer levels
 
@@ -85,31 +76,22 @@ plays to 150.
 | hard       | 9–15        | more             |
 | impossible | 10–16       | the most         |
 
-Like a person, the computer is quicker with common letters like S and slower
-with awkward ones like Y. Tactical levels try to leave you an awkward letter,
-and harder levels go for bonuses more often.
-
-## Stats
-
-```sh
-python play.py --stats        # records, high scores, and word stats
-python play.py --reset-stats  # start over
-```
-
-Stats are saved in `stats.json` inside the game's folder (gitignored). Games
-with a custom `--target-score` or `--turn-time` don't count.
+Like a person, the computer is quicker with easy letters like S. Harder levels
+try to leave you awkward letters and go for bonuses more often.
 
 ## Options
 
-| Option                  | What it does                                    |
-| ----------------------- | ----------------------------------------------- |
-| `--target-score POINTS` | Points to win (default 100, or 150 in challenge) |
+| Option                  | What it does                                      |
+| ----------------------- | ------------------------------------------------- |
+| `--target-score POINTS` | Points to win (default 100, or 150 in challenge)  |
 | `--turn-time SECONDS`   | Seconds per turn (default 10, or 20 in challenge) |
-| `--rules`               | Explain how to play                             |
-| `--stats`               | Show your stats                                 |
-| `--reset-stats`         | Erase your stats                                |
+| `--rules`               | Explain how to play                               |
+| `--stats`               | Show your records, high scores, and word stats    |
+| `--reset-stats`         | Erase your stats                                  |
 
-If you installed it, use `shiritori` in place of `python play.py`.
+Stats live in `stats.json` in the game's folder. Games with a custom target or
+turn time don't count. If you installed the command, use `shiritori` in place
+of `python play.py`.
 
 ## Development
 
@@ -127,6 +109,7 @@ pytest && ruff check . && ruff format --check .
 | `shiritori/challenges.py` | Challenge mode and bonuses                |
 | `shiritori/computer.py`   | The computer opponent                     |
 | `shiritori/stats.py`      | Saved stats                               |
+| `shiritori/style.py`      | Colors and symbols, with plain fallbacks  |
 | `shiritori/terminal.py`   | Keyboard input and the countdown prompt   |
 | `shiritori/words.py`      | The dictionary (`words.txt`)              |
 

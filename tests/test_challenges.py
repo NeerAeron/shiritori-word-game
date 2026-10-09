@@ -262,7 +262,7 @@ def test_words_must_meet_the_turn_challenge():
     game = make_game()
     game.letter = "C"
     game.challenge = next(c for c in TURN_CHALLENGES if c.text == "end with S")
-    assert game.check_word("cat") == "doesn't meet the challenge"
+    assert game.check_word("cat") == "doesn't meet the REQ"
     assert game.check_word("cats") is None
     assert game.check_word("dogs") == "must start with C"  # the usual rules come first
 
