@@ -115,12 +115,15 @@ Keyboard = WindowsKeyboard if sys.platform == "win32" else PosixKeyboard
 
 
 class TurnPrompt:
-    """A single-line prompt with a live countdown, such as `  7 | Neer (K): kit`.
+    """A single-line prompt with a live countdown, such as `  7 | Neer: Kit`.
 
     Use it as a context manager: the clock starts on entry and a background
     thread redraws the countdown as it ticks. On exit the line is cleared so
     the caller can print the outcome of the turn in its place. The countdown
     keeps going below zero; it is up to the caller what that means.
+
+    *start* is the start of the word, already typed and shown in capitals,
+    such as the letter it must begin with; Backspace can't remove it.
 
     The countdown shows the seconds left, unless *countdown* is given: it
     turns the seconds taken so far into the text to show instead, such as
@@ -132,14 +135,16 @@ class TurnPrompt:
         label: str,
         seconds: int,
         *,
+        start: str = "",
         countdown: Callable[[float], str] | None = None,
         out: TextIO | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.label = label
         self.seconds = seconds
+        self.start = start.lower()
         self._countdown = countdown
-        self.text = ""
+        self.text = self.start
         self._message = ""
         self._out = out or sys.stdout
         self._clock = clock
@@ -177,17 +182,21 @@ class TurnPrompt:
 
         Only the letters a-z are accepted. Pressing Enter submits the word if
         *check* returns None for it; otherwise the problem *check* describes is
-        shown next to the word and the player can carry on editing.
+        shown next to the word and the player can carry on editing. Typing the
+        given start again out of habit is forgiven: "bbanana" plays "banana".
         """
         while True:
             key = read_key()
             if key in ENTER_KEYS:
                 problem = check(self.text)
+                retyped = self.text[len(self.start) :]
+                if problem and self.start and retyped.startswith(self.start) and not check(retyped):
+                    return retyped, self.elapsed()
                 if problem is None:
                     return self.text, self.elapsed()
                 self._update(self.text, problem)
             elif key in BACKSPACE_KEYS:
-                self._update(self.text[:-1])
+                self._update(self.text[:-1] if len(self.text) > len(self.start) else self.text)
             elif len(key) == 1 and key.isascii() and key.isalpha():
                 self._update(self.text + key.lower())
 
@@ -197,12 +206,13 @@ class TurnPrompt:
         delays: Sequence[float],
         sleep: Callable[[float], None] = time.sleep,
     ) -> float:
-        """Type *word* out a letter at a time, and return the seconds taken.
+        """Type out the rest of *word* a letter at a time, and return the seconds taken.
 
-        *delays* holds the pause before each letter, then the pause before Enter.
+        *delays* holds the pause before each letter still to type, then the
+        pause before Enter.
         """
         *before_letters, before_enter = delays
-        for letter, delay in zip(word, before_letters, strict=True):
+        for letter, delay in zip(word[len(self.text) :], before_letters, strict=True):
             sleep(delay)
             self._update(self.text + letter)
         sleep(before_enter)
@@ -229,7 +239,8 @@ class TurnPrompt:
 
     def _render(self) -> None:
         # Only call this while holding self._lock.
-        line = f"{self._shown():>3} | {self.label}: {self.text}"
+        word = self.start.upper() + self.text[len(self.start) :]
+        line = f"{self._shown():>3} | {self.label}: {word}"
         note = f"  ({self._message})" if self._message else ""
         # Pad with spaces to erase whatever is left of a longer previous line,
         # then step back so the cursor sits right after the typed text.

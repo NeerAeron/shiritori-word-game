@@ -225,6 +225,13 @@ def countdown(game: Game) -> Callable[[float], str] | None:
     return None
 
 
+def turn_prompt(game: Game) -> TurnPrompt:
+    """The live prompt for the current player, with the word's first letter already typed."""
+    return TurnPrompt(
+        game.current_player.name, game.turn_time, start=game.letter, countdown=countdown(game)
+    )
+
+
 def play(
     game: Game,
     rng: random.Random | None = None,
@@ -256,12 +263,12 @@ def play(
                     print(f"{player.name} is stumped! New letter: {game.letter}")
                     continue
                 thinking = thinking_time(game, player.difficulty, word, rng)
-                with TurnPrompt(label, game.turn_time, countdown=countdown(game)) as prompt:
-                    delays = typing_delays(word, rng, thinking, player.difficulty.typing)
+                with turn_prompt(game) as prompt:
+                    delays = typing_delays(word[1:], rng, thinking, player.difficulty.typing)
                     seconds = prompt.type_word(word, delays)
             else:
                 keyboard.discard_pending()
-                with TurnPrompt(label, game.turn_time, countdown=countdown(game)) as prompt:
+                with turn_prompt(game) as prompt:
                     word, seconds = prompt.read_word(game.check_word, keyboard.read_key)
 
             points = game.play(word, seconds)

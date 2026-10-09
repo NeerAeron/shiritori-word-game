@@ -168,7 +168,7 @@ def test_computers_play_until_someone_wins(instant_computer, capsys, game_type):
 
 
 def test_play_with_people_at_the_keyboard(capsys):
-    keyboard = FakeKeyboard("xyz\n\x7f\x7f\x7fapple\negg\ngiraffe\nelephant\n")
+    keyboard = FakeKeyboard("xyz\n\x7f\x7f\x7fpple\ngg\niraffe\nlephant\n")
     words = WordList(["apple", "egg", "giraffe", "elephant"])
     game = Game([Player("Ann"), Player("Bob")], words, target_score=30)
     game.letter = "A"
@@ -179,7 +179,7 @@ def test_play_with_people_at_the_keyboard(capsys):
     assert keyboard.keys == []
     assert keyboard.discarded == 4  # before each person's turn
     output = capsys.readouterr().out
-    assert "xyz  (must start with A)" in output
+    assert "Axyz  (not in the dictionary)" in output  # the A is typed for you
     assert "Ann (A): apple  +15  (5L + 10s)" in output
     assert "Bob (E): egg  +13" in output
     assert "Ann (G): giraffe  +17" in output
@@ -206,7 +206,7 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     per_l = RoundBonus("+3 per L", lambda word: 3 * word.count("l"))
     monkeypatch.setattr(ChallengeGame, "_pick_challenge", lambda self: end_with_e)
     monkeypatch.setattr(ChallengeGame, "_pick_round_bonus", lambda self: per_l)
-    keyboard = FakeKeyboard("ant\n\x7f\x7f\x7fapple\neagle\nedge\nelse\n")
+    keyboard = FakeKeyboard("nt\n\x7f\x7fpple\nagle\ndge\nlse\n")
     words = WordList(["ant", "apple", "eagle", "edge", "else"])
     game = ChallengeGame([Player("Ann"), Player("Bob")], words, target_score=40)
     game.letter = "A"
@@ -219,8 +219,8 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     assert "GAME BONUS x2: include G" in output
     assert "Starting in 1..." in output
     assert "  Challenge: end with E | +3 per L | x2: include G" in output
-    assert "+10 | Ann (A): apple" in output  # the countdown shows time points
-    assert "ant  (doesn't meet the challenge)" in output
+    assert "+10 | Ann: Apple" in output  # the countdown shows time points
+    assert "Ant  (doesn't meet the challenge)" in output
     assert "Ann (A): apple  +18  (5L + 3B + 10s)\n" in output
     assert "Bob (E): eagle  +36  (5L + 3B + 10s) x2" in output
     assert "Ann (E): edge  +28  (4L + 10s) x2" in output

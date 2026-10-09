@@ -84,6 +84,47 @@ def test_shows_why_a_word_was_rejected_and_lets_the_player_fix_it(clock, out):
     assert "caat  (not in the dictionary)" in out.getvalue()
 
 
+def test_the_first_letter_is_already_typed(clock, out):
+    with TurnPrompt("Ann", 10, start="C", out=out, clock=clock) as prompt:
+        word, _ = prompt.read_word(accept_anything, keys(*"at", "\n"))
+    assert word == "cat"
+    assert "\r 10 | Ann: C" in out.getvalue()
+    assert "\r 10 | Ann: Cat" in out.getvalue()
+
+
+def test_backspace_cannot_remove_the_first_letter(clock, out):
+    with TurnPrompt("Ann", 10, start="c", out=out, clock=clock) as prompt:
+        word, _ = prompt.read_word(accept_anything, keys("\x7f", "\x7f", *"at", "\n"))
+    assert word == "cat"
+
+
+def test_typing_the_first_letter_again_is_forgiven(clock, out):
+    def check(word):
+        return None if word in ("cat", "eel") else "not in the dictionary"
+
+    with TurnPrompt("Ann", 10, start="c", out=out, clock=clock) as prompt:
+        word, _ = prompt.read_word(check, keys(*"cat", "\n"))
+    assert word == "cat"
+    with TurnPrompt("Ann", 10, start="e", out=out, clock=clock) as prompt:
+        word, _ = prompt.read_word(check, keys(*"el", "\n"))
+    assert word == "eel"  # a word that really does start with the letter twice
+
+
+def test_the_computer_types_the_rest_of_the_word(clock, out):
+    pauses = []
+
+    def sleep(seconds):
+        pauses.append(seconds)
+        clock.now += seconds
+
+    with TurnPrompt("Bot", 10, start="c", out=out, clock=clock) as prompt:
+        seconds = prompt.type_word("cat", [1.0, 0.25, 0.5], sleep=sleep)
+    assert prompt.text == "cat"
+    assert pauses == [1.0, 0.25, 0.5]
+    assert seconds == 1.75
+    assert ": Ca" in out.getvalue()
+
+
 def test_draws_the_countdown_and_typed_text(clock, out):
     with TurnPrompt("Ann (C)", 10, out=out, clock=clock) as prompt:
         prompt.read_word(accept_anything, keys(*"ca", "t", "\n"))
