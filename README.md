@@ -46,7 +46,7 @@ shiritori
 ## How to play
 
 - Name a word that starts with the last letter of the previous word. That
-  letter is typed for you.
+  letter is typed for you, and typing it again is skipped.
 - Words must be real, 3+ letters, A–Z only, and not already played this game.
 - **Score:** a point per letter, plus a point per second left on the 10-second
   clock, shown as `(5L + 8s)`. Run out of time and you lose a point per second over.
@@ -132,6 +132,7 @@ pytest && ruff check . && ruff format --check .
 | `shiritori/challenges.py` | Challenge mode and bonuses                |
 | `shiritori/computer.py`   | The computer opponent                     |
 | `shiritori/stats.py`      | Saved stats                               |
+| `shiritori/style.py`      | Colors and symbols, with plain fallbacks  |
 | `shiritori/terminal.py`   | Keyboard input and the countdown prompt   |
 | `shiritori/words.py`      | The dictionary (`words.txt`)              |
 

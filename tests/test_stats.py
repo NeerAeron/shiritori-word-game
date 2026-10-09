@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from shiritori import stats as stats_module
+from shiritori import style
 from shiritori.challenges import ANY_WORD, ChallengeGame
 from shiritori.computer import DIFFICULTIES, ComputerPlayer
 from shiritori.game import Game, Player
@@ -261,3 +262,16 @@ def test_format_stats_shows_everything():
     assert "Challenge mode against the computer" in report
     assert "  #  Points  Word     Player  Opponent  Date" in report
     assert "  1      17  giraffe  Neer    hard      2026-10-08" in report
+
+
+@pytest.mark.parametrize("colors", [False, True])
+def test_a_full_high_score_table_stays_lined_up(colors):
+    entries = [
+        HighScore(100 - rank, f"word{rank}", "Neer", "easy", "2026-10-09") for rank in range(10)
+    ]
+    style.use_colors(colors)
+    report = style.plain(format_stats(Stats(high_scores={"classic": entries}))).splitlines()
+    header = report.index("Classic high scores") + 1
+    assert report[header].startswith("   #  Points  Word")
+    assert report[header + 1].startswith("   1     100  word0")
+    assert report[header + 10].startswith("  10      91  word9")

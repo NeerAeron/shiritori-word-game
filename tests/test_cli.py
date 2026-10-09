@@ -517,6 +517,17 @@ def test_a_long_scoreboard_wraps_under_the_names():
     assert lines[0].endswith(" ·")
 
 
+@pytest.mark.parametrize("columns", ["80", "50", "40"])
+def test_a_wrapped_scoreboard_never_runs_past_the_edge(monkeypatch, columns):
+    monkeypatch.setenv("COLUMNS", columns)
+    names = [("A" * 20, 100), ("B" * 20, 101), ("C" * 15, 102), ("Dot", 5)]
+    for count in range(2, 5):
+        for cut in range(1, 21):
+            players = [Player(name[:cut] or name, score) for name, score in names[:count]]
+            for line in cli.scoreboard(players).split("\n"):
+                assert len(line) <= style.line_width()
+
+
 def test_breakdown_colors_only_the_multiplier():
     style.use_colors(True)
     move = Move(Player("Neer"), "dusty", 37, 1.9, 9, 2)

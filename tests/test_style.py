@@ -1,3 +1,4 @@
+import ctypes
 import io
 
 import pytest
@@ -86,3 +87,61 @@ def test_symbols_fall_back_to_plain_ones():
 def test_lines_stay_within_the_terminal_and_79_columns(monkeypatch, columns, width):
     monkeypatch.setenv("COLUMNS", columns)
     assert style.line_width() == width
+
+
+class FakeKernel32:
+    """Stands in for Windows' kernel32: only the handles in *consoles* are consoles."""
+
+    def __init__(self, consoles):
+        self.modes_set = []
+
+        def get_mode(handle, mode):
+            if handle not in consoles:
+                return 0
+            mode._obj.value = 3
+            return 1
+
+        def set_mode(handle, mode):
+            self.modes_set.append((handle, mode))
+            return 1
+
+        # Plain functions, so the code under test can set argtypes on them.
+        self.GetStdHandle = lambda handle_id: {-11: 1, -12: 2}[handle_id]
+        self.GetConsoleMode = get_mode
+        self.SetConsoleMode = set_mode
+
+
+@pytest.fixture
+def windows(monkeypatch):
+    """Pretend to be on Windows, with a fake console API; return what was registered at exit."""
+    monkeypatch.setenv("TERM", "xterm")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setattr(style.sys, "platform", "win32")
+    at_exit = []
+    monkeypatch.setattr(style.atexit, "register", lambda *call: at_exit.append(call))
+
+    def use(kernel32):
+        monkeypatch.setattr(ctypes, "WinDLL", lambda name: kernel32, raising=False)
+
+    return use, at_exit
+
+
+def test_windows_consoles_are_asked_for_colors_and_put_back_at_exit(windows):
+    use, at_exit = windows
+    kernel32 = FakeKernel32(consoles={1})
+    use(kernel32)
+    assert style.colors_supported(FakeStream())
+    assert kernel32.modes_set == [(1, 3 | 0x0004)]
+    assert at_exit == [(kernel32.SetConsoleMode, 1, 3)]
+
+
+def test_no_colors_when_the_windows_console_says_no(windows):
+    use, at_exit = windows
+    use(FakeKernel32(consoles=set()))
+    assert not style.colors_supported(FakeStream())
+    assert at_exit == []
+
+
+def test_no_colors_on_windows_without_the_console_api(windows, monkeypatch):
+    monkeypatch.delattr(ctypes, "WinDLL", raising=False)
+    assert not style.colors_supported(FakeStream())

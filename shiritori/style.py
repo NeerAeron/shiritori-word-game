@@ -65,23 +65,26 @@ def _enable_windows_escape_codes() -> bool:
     """
     try:
         import ctypes
-        from ctypes import wintypes
 
-        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-        virtual_terminal_processing = 0x0004
-        worked = {}
-        for handle_id in (-11, -12):  # Standard output, standard error
-            handle = kernel32.GetStdHandle(handle_id)
-            mode = wintypes.DWORD()
-            worked[handle_id] = bool(
-                kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-                and kernel32.SetConsoleMode(handle, mode.value | virtual_terminal_processing)
-            )
-            if worked[handle_id]:
-                atexit.register(kernel32.SetConsoleMode, handle, mode.value)
-        return worked[-11]
+        kernel32 = ctypes.WinDLL("kernel32")  # type: ignore[attr-defined]
     except (AttributeError, OSError):
         return False
+    # Handles are pointer-sized, so say so: ctypes would otherwise assume an int.
+    kernel32.GetStdHandle.restype = ctypes.c_void_p
+    kernel32.GetConsoleMode.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong))
+    kernel32.SetConsoleMode.argtypes = (ctypes.c_void_p, ctypes.c_ulong)
+    virtual_terminal_processing = 0x0004
+    worked = {}
+    for handle_id in (-11, -12):  # Standard output, standard error
+        handle = kernel32.GetStdHandle(handle_id)
+        mode = ctypes.c_ulong()
+        worked[handle_id] = bool(
+            kernel32.GetConsoleMode(handle, ctypes.byref(mode))
+            and kernel32.SetConsoleMode(handle, mode.value | virtual_terminal_processing)
+        )
+        if worked[handle_id]:
+            atexit.register(kernel32.SetConsoleMode, handle, mode.value)
+    return worked[-11]
 
 
 def paint(text: str, *styles: str) -> str:

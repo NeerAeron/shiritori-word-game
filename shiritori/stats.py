@@ -317,5 +317,5 @@ def _columns(header: Sequence[str], rows: Sequence[Sequence[str]], align: str) -
             for cell, width, side in zip(row, widths, align, strict=True)
         ]
         lines.append(("  " + "  ".join(cells)).rstrip())
-    lines[0] = "  " + paint(lines[0].strip(), "dim")  # The header row
+    lines[0] = "  " + paint(lines[0][2:], "dim")  # The header row, still lined up
     return lines

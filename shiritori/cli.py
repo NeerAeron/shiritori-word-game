@@ -52,8 +52,8 @@ HOW_TO_PLAY = f"""\
 How to play
 
   Name a word that starts with the last letter of the previous word; that
-  letter is typed for you. Words must be real, {MIN_WORD_LENGTH}+ letters, and not already
-  played this game.
+  letter is typed for you, and typing it again is skipped. Words must be
+  real, {MIN_WORD_LENGTH}+ letters, and not already played this game.
 
   Score a point per letter, plus a point per second left on the
   {CLASSIC_CLOCK}-second clock. Run out of time and you lose points.
@@ -231,12 +231,14 @@ def scoreboard(players: Sequence[Player]) -> str:
 
     entries = [entry(player) for player in players]
     separator = symbol(" · ", " | ")
+    trail = separator.rstrip()  # Ends a line that continues below
     indent = " " * 6  # Under the names on the line above
     lines, line = [], entries[0]
-    for entry in entries[1:]:
+    for position, entry in enumerate(entries[1:], 2):
         joined = line + paint(separator, "dim") + entry
-        if len(indent) + width(joined) > line_width():
-            lines.append(line + paint(separator.rstrip(), "dim"))
+        room_for_trail = len(trail) if position < len(entries) else 0
+        if len(indent) + width(joined) + room_for_trail > line_width():
+            lines.append(line + paint(trail, "dim"))
             line = entry
         else:
             line = joined
