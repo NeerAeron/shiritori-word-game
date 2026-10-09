@@ -8,30 +8,32 @@ Windows 10 and later do once asked to.
 
 from __future__ import annotations
 
+import atexit
 import os
 import re
+import shutil
 import sys
 from typing import TextIO
 
-_CODES = {
-    "bold": "1",
-    "dim": "2",
-    "red": "31",
-    "green": "32",
-    "yellow": "33",
-    "blue": "34",
-    "magenta": "35",
-    "cyan": "36",
-}
+_CODES = {"bold": "1", "dim": "2", "red": "31", "green": "32", "yellow": "33", "magenta": "35"}
 _ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+# Some of the symbols are a different width in Chinese, Japanese and Korean terminals.
+_WIDE_LOCALES = ("ja", "ko", "zh")
 
 _colors = False
+_symbols = True
 
 
 def use_colors(enabled: bool) -> None:
     """Turn colors on or off for everything painted from now on."""
     global _colors
     _colors = enabled
+
+
+def use_symbols(enabled: bool) -> None:
+    """Choose between the non-ASCII symbols and their plain fallbacks."""
+    global _symbols
+    _symbols = enabled
 
 
 def colors_supported(stream: TextIO) -> bool:
@@ -43,41 +45,68 @@ def colors_supported(stream: TextIO) -> bool:
     return sys.platform != "win32" or _enable_windows_escape_codes()
 
 
+def symbols_supported(stream: TextIO) -> bool:
+    """Whether *stream* can show the symbols, each one column wide."""
+    try:
+        "»·".encode(stream.encoding or "ascii")
+    except (UnicodeEncodeError, LookupError):
+        return False
+    for name in ("LC_ALL", "LC_CTYPE", "LANG"):
+        if value := os.environ.get(name):
+            return not value.lower().startswith(_WIDE_LOCALES)
+    return True
+
+
 def _enable_windows_escape_codes() -> bool:
-    """Ask the Windows console to understand ANSI escape codes."""
+    """Ask the Windows console to understand ANSI escape codes on stdout and stderr.
+
+    Returns whether it worked for stdout. The consoles get their old settings
+    back when the game exits.
+    """
     try:
         import ctypes
         from ctypes import wintypes
 
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-        handle = kernel32.GetStdHandle(-11)  # Standard output
-        mode = wintypes.DWORD()
-        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
-            return False
         virtual_terminal_processing = 0x0004
-        return bool(kernel32.SetConsoleMode(handle, mode.value | virtual_terminal_processing))
+        worked = {}
+        for handle_id in (-11, -12):  # Standard output, standard error
+            handle = kernel32.GetStdHandle(handle_id)
+            mode = wintypes.DWORD()
+            worked[handle_id] = bool(
+                kernel32.GetConsoleMode(handle, ctypes.byref(mode))
+                and kernel32.SetConsoleMode(handle, mode.value | virtual_terminal_processing)
+            )
+            if worked[handle_id]:
+                atexit.register(kernel32.SetConsoleMode, handle, mode.value)
+        return worked[-11]
     except (AttributeError, OSError):
         return False
 
 
 def paint(text: str, *styles: str) -> str:
-    """*text* in the given styles, such as "bold" and "green", if colors are on."""
+    """*text* in the given styles, such as "bold" or "green", if colors are on."""
     if not _colors or not styles or not text:
         return text
     codes = ";".join(_CODES[style] for style in styles)
     return f"\x1b[{codes}m{text}\x1b[0m"
 
 
+def plain(text: str) -> str:
+    """*text* without any colors."""
+    return _ESCAPE.sub("", text)
+
+
 def width(text: str) -> int:
-    """How many columns *text* takes up on screen, ignoring color codes."""
-    return len(_ESCAPE.sub("", text))
+    """How many columns *text* takes up on screen, ignoring colors."""
+    return len(plain(text))
 
 
-def symbol(fancy: str, plain: str, stream: TextIO | None = None) -> str:
-    """*fancy* if *stream* (standard output) can encode it, else *plain*."""
-    encoding = getattr(stream or sys.stdout, "encoding", None) or "ascii"
-    try:
-        fancy.encode(encoding)
-    except (UnicodeEncodeError, LookupError):
-        return plain
-    return fancy
+def symbol(fancy: str, fallback: str) -> str:
+    """*fancy*, or *fallback* if symbols are off."""
+    return fancy if _symbols else fallback
+
+
+def line_width() -> int:
+    """How wide a line can be without wrapping, leaving the last column free."""
+    return min(79, shutil.get_terminal_size((80, 24)).columns - 1)

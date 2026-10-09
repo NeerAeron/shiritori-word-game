@@ -1,0 +1,88 @@
+import io
+
+import pytest
+
+from shiritori import style
+
+
+class FakeStream(io.StringIO):
+    def __init__(self, tty=True, encoding="utf-8"):
+        super().__init__()
+        self._tty = tty
+        self._encoding = encoding
+
+    def isatty(self):
+        return self._tty
+
+    @property
+    def encoding(self):
+        return self._encoding
+
+
+def test_paint_is_plain_text_when_colors_are_off():
+    assert style.paint("hello", "bold", "green") == "hello"
+
+
+def test_paint_wraps_text_in_color_codes_when_colors_are_on():
+    style.use_colors(True)
+    assert style.paint("hello", "bold") == "\x1b[1mhello\x1b[0m"
+    assert style.paint("hello", "red") == "\x1b[31mhello\x1b[0m"
+    assert style.paint("", "red") == ""
+    assert style.paint("hello") == "hello"
+
+
+def test_width_and_plain_ignore_color_codes():
+    style.use_colors(True)
+    text = style.paint("+10", "yellow") + " | " + style.paint("B", "bold")
+    assert style.plain(text) == "+10 | B"
+    assert style.width(text) == 7
+
+
+@pytest.mark.parametrize(
+    ("env", "tty", "supported"),
+    [
+        ({}, True, True),
+        ({}, False, False),
+        ({"NO_COLOR": "1"}, True, False),
+        ({"TERM": "dumb"}, True, False),
+        ({"NO_COLOR": ""}, True, True),  # only a non-empty NO_COLOR counts
+    ],
+)
+def test_colors_only_go_to_terminals_that_want_them(monkeypatch, env, tty, supported):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setattr(style.sys, "platform", "linux")
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    assert style.colors_supported(FakeStream(tty=tty)) is supported
+
+
+@pytest.mark.parametrize(
+    ("encoding", "lang", "supported"),
+    [
+        ("utf-8", "en_US.UTF-8", True),
+        ("ascii", "en_US.UTF-8", False),
+        ("cp1252", "", True),
+        ("cp437", "", True),
+        ("cp932", "", False),
+        ("utf-8", "ja_JP.UTF-8", False),  # the symbols are wider there
+    ],
+)
+def test_symbols_need_an_encoding_and_locale_that_show_them(monkeypatch, encoding, lang, supported):
+    for name in ("LC_ALL", "LC_CTYPE", "LANG"):
+        monkeypatch.delenv(name, raising=False)
+    if lang:
+        monkeypatch.setenv("LANG", lang)
+    assert style.symbols_supported(FakeStream(encoding=encoding)) is supported
+
+
+def test_symbols_fall_back_to_plain_ones():
+    assert style.symbol("»", ">") == "»"
+    style.use_symbols(False)
+    assert style.symbol("»", ">") == ">"
+
+
+@pytest.mark.parametrize(("columns", "width"), [("40", 39), ("80", 79), ("200", 79)])
+def test_lines_stay_within_the_terminal_and_79_columns(monkeypatch, columns, width):
+    monkeypatch.setenv("COLUMNS", columns)
+    assert style.line_width() == width

@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+from shiritori import style
 from shiritori.terminal import PosixKeyboard, TurnPrompt, WindowsKeyboard
 
 
@@ -148,6 +149,59 @@ def test_countdown_can_show_something_else(clock, out):
     assert "\r+10 | Ann (C): c" in out.getvalue()
     assert "\r +9 | Ann (C): ca" in out.getvalue()
     assert "\r +8 | Ann (C): cat" in out.getvalue()
+
+
+def test_the_countdown_and_given_letter_get_colors(clock, out):
+    style.use_colors(True)
+    with TurnPrompt("Ann", 10, start="c", tone=lambda elapsed: "yellow", out=out, clock=clock):
+        pass
+    drawn = out.getvalue()
+    assert "\x1b[33m 10\x1b[0m" in drawn
+    assert "\x1b[1mC\x1b[0m" in drawn
+    assert style.plain(drawn).startswith("\r 10 | Ann: C")
+
+
+def test_redraws_measure_what_shows_on_screen_not_the_color_codes(clock, out):
+    style.use_colors(True)
+
+    def check(word):
+        return "not in the dictionary"
+
+    # The keys run out after these, which ends the turn.
+    with (
+        TurnPrompt("Ann", 10, start="c", out=out, clock=clock) as prompt,
+        pytest.raises(IndexError),
+    ):
+        prompt.read_word(check, keys(*"ats", "\n", "\x7f"))
+    frames = out.getvalue().split("\r")
+    noted = next(frame for frame in frames if "dictionary" in frame)
+    after = frames[frames.index(noted) + 1]  # Backspace clears the note
+    visible_note = len("  (not in the dictionary)")
+    assert style.plain(noted) == " 10 | Ann: Cats  (not in the dictionary)" + "\b" * visible_note
+    # The shorter line is padded by exactly the visible difference, then the cursor steps back.
+    padding = visible_note + 1
+    assert style.plain(after) == " 10 | Ann: Cat" + " " * padding + "\b" * padding
+    assert out.getvalue().endswith("\r" + " " * len(" 10 | Ann: Cat") + "\r")
+
+
+@pytest.mark.parametrize(
+    ("columns", "note"),
+    [("80", "  (not in the dictionary)"), ("30", "  (not in the)"), ("25", "  (not)"), ("22", "")],
+)
+def test_a_long_note_is_shortened_or_left_out_to_fit(monkeypatch, clock, out, columns, note):
+    monkeypatch.setenv("COLUMNS", columns)
+
+    def check(word):
+        return "not in the dictionary"
+
+    # The keys run out after these, which ends the turn.
+    with (
+        TurnPrompt("Ann", 10, start="c", out=out, clock=clock) as prompt,
+        pytest.raises(IndexError),
+    ):
+        prompt.read_word(check, keys(*"ats", "\n"))
+    last = [frame for frame in out.getvalue().split("\r") if "Ann: Cats" in frame][-1]
+    assert last.rstrip("\b").rstrip() == (" 10 | Ann: Cats" + note).rstrip()
 
 
 def test_clears_the_line_when_done(clock, out):

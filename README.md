@@ -7,11 +7,13 @@ last one ended. This English version runs in your terminal. Race the clock
 against the computer, or up to 4 friends on one keyboard.
 
 ```text
-Neer (T): tiger  +13  (5L + 8s)
-    Neer: 13 | Computer: 0
-Computer (R): rhubarb  +16  (7L + 9s)
-    Neer: 13 | Computer: 16
-  8 | Neer (B): bana
++13 | Neer: Tiger  (5L + 8s)
+      Neer 13 · Computer 0
+
++16 | Computer: Rhubarb  (7L + 9s)
+      Neer 13 · Computer 16
+
+  8 | Neer: Bana
 ```
 
 ## Features
@@ -20,6 +22,8 @@ Computer (R): rhubarb  +16  (7L + 9s)
 - **Five computer levels**, from beginner to impossible
 - **Fair turns:** everyone gets the same number of turns
 - **Saved stats:** records, high scores, favorite and longest words
+- **Easy on the eyes:** a few colors where your terminal supports them (set
+  `NO_COLOR` to turn them off)
 - **No dependencies:** just Python 3.10+, on Linux, macOS, or Windows
 
 ## Install
@@ -41,7 +45,8 @@ shiritori
 
 ## How to play
 
-- Name a word that starts with the last letter of the previous word.
+- Name a word that starts with the last letter of the previous word. That
+  letter is typed for you.
 - Words must be real, 3+ letters, A–Z only, and not already played this game.
 - **Score:** a point per letter, plus a point per second left on the 10-second
   clock, shown as `(5L + 8s)`. Run out of time and you lose a point per second over.
@@ -53,8 +58,8 @@ quits. Run `python play.py --rules` for a refresher in the terminal.
 
 ## Challenge mode
 
-Every word must also meet a challenge that changes each turn, such as *end
-with S*, *no letter E*, or *hide an animal (ANT, BAT, CAT…)*. There are 119,
+Every word must also meet a requirement (REQ) that changes each turn, such as
+*end with S*, *no letter E*, or *hide an animal (ANT, BAT, CAT…)*. There are 119,
 each leaving at least 100 words to choose from, and harder computer levels
 get harder ones. Vowels are A, E, I, O, U.
 
@@ -67,8 +72,8 @@ Two bonuses add to your score:
   Words that meet it score 1.5x–3x, and the harder the bonus, the more it pays.
 
 ```text
-  Challenge: include Y | +2 per S | x2.3: U is the only vowel
-Neer (D): dusty  +37  (5L + 2B + 9s) x2.3
+REQ: include Y | Bonuses: +2 per S, x2.3: U is the only vowel
++37 | Neer: Dusty  (5L + 2B + 9s) x2.3
 ```
 
 Time points (the `s` in the score) start at +10 and drop 1 every 2 seconds.

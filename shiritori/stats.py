@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .computer import DIFFICULTIES, ComputerPlayer
 from .game import Game
+from .style import paint
 
 FORMAT_VERSION = 2
 HIGH_SCORE_COUNT = 10
@@ -237,7 +238,7 @@ def _upgrade_from_version_1(data: dict) -> dict:
 
 
 def format_stats(stats: Stats) -> str:
-    lines = ["Your words"]
+    lines = [paint("Your words", "bold")]
     favorite = stats.favorite_word()
     if favorite:
         word, count = favorite
@@ -261,7 +262,7 @@ def format_stats(stats: Stats) -> str:
             ],
         )
     else:
-        lines.append("  None yet. Play a game to get started!")
+        lines.append("  " + paint("None yet. Play a game to get started!", "dim"))
 
     for mode in MODES:
         records = stats.records.get(mode, {})
@@ -270,14 +271,14 @@ def format_stats(stats: Stats) -> str:
             record = records.get(name, Record())
             win_rate = f"{record.won / record.played:.0%}" if record.played else "-"
             rows.append([name, str(record.played), str(record.won), str(record.lost), win_rate])
-        lines += ["", f"{mode.title()} mode against the computer"]
+        lines += ["", paint(f"{mode.title()} mode against the computer", "bold")]
         lines += _columns(["Difficulty", "Played", "Won", "Lost", "Win rate"], rows, "<>>>>")
 
     multiplayer = ", ".join(f"{stats.multiplayer_games.get(mode, 0)} {mode}" for mode in MODES)
-    lines += ["", f"Multiplayer games: {multiplayer}"]
+    lines += ["", f"{paint('Multiplayer games:', 'bold')} {multiplayer}"]
 
     for mode in MODES:
-        lines += ["", f"{mode.title()} high scores"]
+        lines += ["", paint(f"{mode.title()} high scores", "bold")]
         entries = stats.high_scores.get(mode, [])
         if entries:
             rows = [
@@ -286,7 +287,7 @@ def format_stats(stats: Stats) -> str:
             ]
             lines += _columns(["#", "Points", "Word", "Player", "Opponent", "Date"], rows, ">><<<<")
         else:
-            lines.append("  None yet.")
+            lines.append("  " + paint("None yet.", "dim"))
     return "\n".join(lines)
 
 
@@ -300,7 +301,10 @@ def _words(count: int) -> str:
 
 def _table(labels: Sequence[str], values: Sequence[str]) -> list[str]:
     width = max(map(len, labels))
-    return [f"  {label.ljust(width)}  {value}" for label, value in zip(labels, values, strict=True)]
+    return [
+        f"  {paint(label.ljust(width), 'dim')}  {value}"
+        for label, value in zip(labels, values, strict=True)
+    ]
 
 
 def _columns(header: Sequence[str], rows: Sequence[Sequence[str]], align: str) -> list[str]:
@@ -313,4 +317,5 @@ def _columns(header: Sequence[str], rows: Sequence[Sequence[str]], align: str) -
             for cell, width, side in zip(row, widths, align, strict=True)
         ]
         lines.append(("  " + "  ".join(cells)).rstrip())
+    lines[0] = "  " + paint(lines[0].strip(), "dim")  # The header row
     return lines
