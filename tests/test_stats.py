@@ -114,7 +114,7 @@ def test_each_mode_has_its_own_high_scores():
 
     assert [entry.word for entry in stats.high_scores["classic"]] == ["giraffe", "apple"]
     assert [entry.word for entry in stats.high_scores["challenge"]] == ["giraffe", "apple"]
-    assert stats.high_scores["challenge"][0].points >= 27  # 7 letters + a 20-second clock
+    assert stats.high_scores["challenge"][0].points >= 17  # 7 letters + 10 time points
 
 
 def test_high_scores_keep_only_the_best_and_older_ties_first():

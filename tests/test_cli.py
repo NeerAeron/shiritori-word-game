@@ -208,22 +208,23 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     monkeypatch.setattr(ChallengeGame, "_pick_round_bonus", lambda self: per_l)
     keyboard = FakeKeyboard("ant\n\x7f\x7f\x7fapple\neagle\nedge\nelse\n")
     words = WordList(["ant", "apple", "eagle", "edge", "else"])
-    game = ChallengeGame([Player("Ann"), Player("Bob")], words, target_score=60)
+    game = ChallengeGame([Player("Ann"), Player("Bob")], words, target_score=40)
     game.letter = "A"
     game.bonus, game.multiplier = Challenge("include G", lambda word: "g" in word), 2.0
 
     winner = cli.play(game, keyboard=keyboard, sleep=lambda seconds: None)
 
-    assert winner.name == "Bob"  # 83 to 76, thanks to his last turn
+    assert winner.name == "Bob"  # 53 to 46, thanks to his last turn
     output = capsys.readouterr().out
     assert "GAME BONUS x2: include G" in output
     assert "Starting in 1..." in output
     assert "  Challenge: end with E | +3 per L | x2: include G" in output
+    assert "+10 | Ann (A): apple" in output  # the countdown shows time points
     assert "ant  (doesn't meet the challenge)" in output
-    assert "Ann (A): apple  +28  (5L + 3B + 20s)\n" in output
-    assert "Bob (E): eagle  +56  (5L + 3B + 20s) x2" in output
-    assert "Ann (E): edge  +48  (4L + 20s) x2" in output
-    assert "Bob (E): else  +27  (4L + 3B + 20s)\n" in output
+    assert "Ann (A): apple  +18  (5L + 3B + 10T)\n" in output
+    assert "Bob (E): eagle  +36  (5L + 3B + 10T) x2" in output
+    assert "Ann (E): edge  +28  (4L + 10T) x2" in output
+    assert "Bob (E): else  +17  (4L + 3B + 10T)\n" in output
 
 
 def test_main_needs_a_terminal(monkeypatch, capsys):
@@ -392,6 +393,7 @@ def test_rules_flag_explains_how_to_play(capsys):
     assert "Challenge mode" in output
     assert "up to 4 people" in output
     assert "200 in challenge mode" in output
+    assert "Time points (T) start at +10 and drop 1 every 2 seconds" in output
 
 
 def test_instructions_only_show_when_asked_for(capsys):
@@ -420,9 +422,19 @@ def test_challenge_mode_shows_the_bonus_then_counts_down(capsys):
     [
         (Move(Player("Neer"), "restitution", 17, time_bonus=6), "(11L + 6s)"),
         (Move(Player("Neer"), "tiger", 2, time_bonus=-3), "(5L - 3s)"),
-        (Move(Player("Neer"), "kiosks", 27, time_bonus=18, round_bonus=3), "(6L + 3B + 18s)"),
-        (Move(Player("Neer"), "dusty", 51, 2.3, 15, 2), "(5L + 2B + 15s) x2.3"),
     ],
 )
 def test_breakdown_shows_how_the_points_add_up(move, text):
     assert cli.breakdown(move) == text
+
+
+@pytest.mark.parametrize(
+    ("move", "text"),
+    [
+        (Move(Player("Neer"), "kiosks", 17, time_bonus=8, round_bonus=3), "(6L + 3B + 8T)"),
+        (Move(Player("Neer"), "dusty", 37, 2.3, 9, 2), "(5L + 2B + 9T) x2.3"),
+        (Move(Player("Neer"), "yak", 1, time_bonus=-2), "(3L - 2T)"),
+    ],
+)
+def test_breakdown_labels_challenge_time_points(move, text):
+    assert cli.breakdown(move, "T") == text

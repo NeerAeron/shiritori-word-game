@@ -43,8 +43,8 @@ shiritori
 
 - Name a word that starts with the last letter of the previous word.
 - Words must be real, 3+ letters, A–Z only, and not already played this game.
-- **Score:** a point per letter, plus a point per second left on the clock,
-  shown as `(5L + 8s)`. Run out of time and you lose a point per second over.
+- **Score:** a point per letter, plus a point per second left on the 10-second
+  clock, shown as `(5L + 8s)`. Run out of time and you lose a point per second over.
 - **Win:** reach 100 points (200 in challenge mode). The round is played out
   so everyone gets the same number of turns, then the highest score wins.
 
@@ -60,17 +60,19 @@ get harder ones. Vowels are A, E, I, O, U.
 
 Two bonuses add to your score:
 
-- **Round bonus:** a new one each turn, such as *+2 per D* or *+3 per double
-  letter*. It shows up as `B` in the score.
+- **Round bonus:** a new one each turn, such as *+2 per S* or *+3 per double
+  letter*. Every letter or pair counts, so *assess* earns +8 from *+2 per S*.
+  It shows up as `B` in the score.
 - **Game bonus:** one per game, such as *include Q* or *U is the only vowel*.
   Words that meet it score 1.5x–3x, and the harder the bonus, the more it pays.
 
 ```text
-  Challenge: include Y | +2 per D | x2.3: U is the only vowel
-Neer (D): dusty  +51  (5L + 2B + 15s) x2.3
+  Challenge: include Y | +2 per S | x2.3: U is the only vowel
+Neer (D): dusty  +37  (5L + 2B + 9T) x2.3
 ```
 
-Challenge mode has a 20-second clock and plays to 200.
+Time points (`T`) start at +10 and drop 1 every 2 seconds. At 0 there are 4
+seconds of grace before they go negative. Challenge mode plays to 200.
 
 ## Computer levels
 

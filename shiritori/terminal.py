@@ -121,6 +121,10 @@ class TurnPrompt:
     thread redraws the countdown as it ticks. On exit the line is cleared so
     the caller can print the outcome of the turn in its place. The countdown
     keeps going below zero; it is up to the caller what that means.
+
+    The countdown shows the seconds left, unless *countdown* is given: it
+    turns the seconds taken so far into the text to show instead, such as
+    the points a word would score now.
     """
 
     def __init__(
@@ -128,11 +132,13 @@ class TurnPrompt:
         label: str,
         seconds: int,
         *,
+        countdown: Callable[[float], str] | None = None,
         out: TextIO | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.label = label
         self.seconds = seconds
+        self._countdown = countdown
         self.text = ""
         self._message = ""
         self._out = out or sys.stdout
@@ -208,17 +214,22 @@ class TurnPrompt:
             self._message = message
             self._render()
 
+    def _shown(self) -> str:
+        if self._countdown:
+            return self._countdown(self.elapsed())
+        return str(self.remaining())
+
     def _tick(self) -> None:
-        shown = self.remaining()
+        shown = self._shown()
         while not self._done.wait(0.05):
-            if self.remaining() != shown:
+            if self._shown() != shown:
                 with self._lock:
-                    shown = self.remaining()
+                    shown = self._shown()
                     self._render()
 
     def _render(self) -> None:
         # Only call this while holding self._lock.
-        line = f"{self.remaining():>3} | {self.label}: {self.text}"
+        line = f"{self._shown():>3} | {self.label}: {self.text}"
         note = f"  ({self._message})" if self._message else ""
         # Pad with spaces to erase whatever is left of a longer previous line,
         # then step back so the cursor sits right after the typed text.

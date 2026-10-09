@@ -26,7 +26,7 @@ class Move:
     word: str
     points: int
     multiplier: float = 1.0  # The game bonus multiplier applied to the points, if any
-    time_bonus: int = 0  # Seconds left on the clock (negative once it ran out)
+    time_bonus: int = 0  # Points for time left on the clock (negative once it ran out)
     round_bonus: int = 0  # Points from the turn's round bonus
 
 
@@ -112,13 +112,17 @@ class Game:
         """Return the round bonus points *word* would earn. Classic games have no bonuses."""
         return 0
 
+    def time_points(self, seconds: float) -> int:
+        """Return the points for answering after *seconds*: one per second left, or lost after."""
+        return round(self.turn_time - seconds)
+
     def score(self, word: str, seconds: float) -> int:
         """Return the points for playing *word* after *seconds* of thinking."""
         return self._move(word.lower(), seconds).points
 
     def _move(self, word: str, seconds: float) -> Move:
-        """Score *word* for the current player: letters, round bonus, and seconds left."""
-        time_bonus = round(len(word) + self.turn_time - seconds) - len(word)
+        """Score *word* for the current player: letters, round bonus, and time points."""
+        time_bonus = self.time_points(seconds)
         round_bonus = self.round_points(word)
         points = len(word) + round_bonus + time_bonus
         # The game bonus multiplies a positive score, but never makes a penalty worse.

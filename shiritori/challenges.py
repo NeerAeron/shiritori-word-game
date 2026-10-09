@@ -1,13 +1,14 @@
 """Challenge mode: a new challenge and round bonus every turn, and a bonus for the whole game.
 
 Every word must meet the turn's challenge. The round bonus adds points, such
-as "+2 per D", and words that meet the game's bonus have their points
+as "+2 per S", and words that meet the game's bonus have their points
 multiplied. Vowels are A, E, I, O and U; Y counts as a consonant. No
 challenge or bonus depends on word length or time.
 """
 
 from __future__ import annotations
 
+import math
 import random
 import re
 from collections import Counter, deque
@@ -233,22 +234,20 @@ def _per_letter(letter: str, value: int) -> RoundBonus:
 
 
 # Round bonuses: a new one every word, adding points to whatever the word
-# scores. Rarer letters are worth more, so a word that goes for one usually
-# earns about +2 to +6.
+# scores. They always stack, paying for each letter or pair: "+2 per S" is
+# worth +8 for ASSESS. Rarer letters are worth more. Flat conditions, like
+# "end with a vowel", are turn challenges instead.
 ROUND_BONUSES = (
-    *(_per_letter(letter, 1) for letter in "eaisrntol"),
-    *(_per_letter(letter, 2) for letter in "cdumgphby"),
-    *(_per_letter(letter, 3) for letter in "fvkw"),
-    *(_per_letter(letter, 5) for letter in "zxjq"),
-    RoundBonus("+1 per vowel", _vowel_count),
+    *(_per_letter(letter, 2) for letter in "eaisrntol"),
+    *(_per_letter(letter, 3) for letter in "cdumgph"),
+    *(_per_letter(letter, 4) for letter in "by"),
+    *(_per_letter(letter, 5) for letter in "fvkw"),
+    *(_per_letter(letter, 10) for letter in "zxjq"),
     RoundBonus(
-        "+2 per vowel pair",
-        lambda word: 2 * sum(a in VOWELS and b in VOWELS for a, b in pairwise(word)),
+        "+3 per vowel pair",
+        lambda word: 3 * sum(a in VOWELS and b in VOWELS for a, b in pairwise(word)),
     ),
     RoundBonus("+3 per double letter", lambda word: 3 * len(re.findall(r"(.)\1", word))),
-    RoundBonus("+3 if it ends in Y", lambda word: 3 * word.endswith("y")),
-    RoundBonus("+2 if it ends in a vowel", lambda word: 2 * (word[-1] in VOWELS)),
-    RoundBonus("+3 if no letter repeats", lambda word: 3 * (len(set(word)) == len(word))),
 )
 NO_ROUND_BONUS = RoundBonus("no round bonus", lambda word: 0)
 
@@ -270,17 +269,21 @@ RECENT_TURNS = 20
 SEARCH_LIMIT = 30
 # Free choice, for letters like X where no challenge leaves enough words.
 ANY_WORD = Challenge("any word you like", lambda word: True)
+# Once time points reach zero, they stay there this many seconds before going negative.
+GRACE_SECONDS = 4
 
 
 class ChallengeGame(Game):
     """A game in challenge mode.
 
-    The rules are the same as a classic game, with a longer turn clock and a
-    higher target, plus:
+    The rules are the same as a classic game, with a higher target, plus:
 
     - every word must meet the turn's challenge, which changes every turn;
-    - each turn has a round bonus that adds points, such as "+2 per E";
-    - words that meet the game's bonus have their points multiplied.
+    - each turn has a round bonus that adds points, such as "+2 per S";
+    - words that meet the game's bonus have their points multiplied;
+    - time points start at half the turn time (+10) and drop a point every 2
+      seconds. At zero there are a few seconds of grace, then they drop a
+      point a second.
 
     *difficulty* sets how hard the turn challenges tend to be.
     """
@@ -320,6 +323,13 @@ class ChallengeGame(Game):
     def round_points(self, word: str) -> int:
         return self.round_bonus.points(word.lower())
 
+    def time_points(self, seconds: float) -> int:
+        """A point per 2 seconds left, then nothing for a few seconds, then -1 a second."""
+        left = self.turn_time - seconds
+        if left > 0:
+            return math.ceil(left / 2)
+        return min(0, math.floor(left + GRACE_SECONDS))
+
     def play(self, word: str, seconds: float) -> int:
         points = super().play(word, seconds)
         self.challenge = self._pick_challenge()
@@ -348,6 +358,8 @@ class ChallengeGame(Game):
         """
         options = self._unplayed_words()
         bonus_options = [word for word in options if self.bonus.test(word)]
+        # No challenge can stop a Z turn handing out the bonus "include Z".
+        bonus_comes_anyway = len(bonus_options) > FREE_BONUS_SHARE * len(options)
         fallback = best = None
         best_count = 0
         for tried, challenge in enumerate(self._shuffled_challenges()):
@@ -359,7 +371,7 @@ class ChallengeGame(Game):
             if not MIN_CHOICES <= count <= MAX_SHARE * len(options):
                 continue
             with_bonus = sum(map(challenge.test, bonus_options))
-            if with_bonus > FREE_BONUS_SHARE * count:
+            if with_bonus > FREE_BONUS_SHARE * count and not bonus_comes_anyway:
                 continue  # Like "include QU" with the bonus "include Q"
             if with_bonus >= 3:
                 fallback = challenge
@@ -372,11 +384,11 @@ class ChallengeGame(Game):
         return chosen
 
     def _pick_round_bonus(self) -> RoundBonus:
-        """Choose a new round bonus that the turn's challenge doesn't spoil.
+        """Choose a new round bonus that this turn doesn't spoil.
 
-        The challenge spoils a bonus if it rules the bonus out, like "+2 per D"
-        with "no letter D", or makes it automatic, like "+2 per D" with
-        "include D". Bonuses most words earn anyway, like "+1 per vowel", are fine.
+        A bonus is spoiled if nearly every word that meets the challenge earns
+        it, like "+2 per R" with "include R" or on an R turn, or if the
+        challenge all but rules it out, like "+2 per R" with "no letter R".
         """
         options = self._unplayed_words()
         matches = [word for word in options if self.challenge.test(word)] or options
@@ -384,9 +396,7 @@ class ChallengeGame(Game):
         self._rng.shuffle(bonuses)
         for bonus in bonuses:
             earned, usually = _earning_share(bonus, matches), _earning_share(bonus, options)
-            ruled_out = earned < usually / 4
-            automatic = earned > 0.95 and usually < 0.9
-            if earned and not ruled_out and not automatic:
+            if 0 < earned <= 0.95 and earned >= usually / 4:
                 return bonus
         return bonuses[0]
 

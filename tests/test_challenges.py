@@ -12,6 +12,7 @@ from shiritori.challenges import (
     GAME_BONUSES,
     HARD,
     MAX_MULTIPLIER,
+    MAX_SHARE,
     MEDIUM,
     MIN_CHOICES,
     MIN_MULTIPLIER,
@@ -153,29 +154,35 @@ def test_every_game_bonus_is_equally_likely_with_a_little_randomness():
     assert len({multiplier for _, multiplier in picks}) > 10  # not just the base values
 
 
-def test_there_are_over_30_short_round_bonuses():
+def test_there_is_a_short_round_bonus_for_every_letter_and_two_pairs():
     texts = [bonus.text for bonus in ROUND_BONUSES]
-    assert len(texts) >= 30
+    assert len(texts) == 28
     assert len(set(texts)) == len(texts)
-    assert all(re.fullmatch(r"\+\d [a-zA-Z ]+", text) and len(text) <= 24 for text in texts)
+    assert all(re.fullmatch(r"\+\d+ per [A-Z]|\+\d+ per [a-z ]+", text) for text in texts)
+    assert max(map(len, texts)) <= 20
+
+
+@pytest.mark.parametrize("bonus", ROUND_BONUSES, ids=lambda b: b.text)
+def test_round_bonuses_always_stack(bonus):
+    earning = [w for w in ("queue", "assess", "bookkeeper", "pizzazz", "jinx") if bonus.points(w)]
+    earning += [w for w in WORDS.starting_with("b") if bonus.points(w)][:50]
+    assert earning
+    for word in earning:  # The word twice over earns at least twice as much
+        assert bonus.points(word * 2) >= 2 * bonus.points(word)
 
 
 @pytest.mark.parametrize(
     ("text", "word", "points"),
     [
-        ("+1 per E", "excellence", 4),
-        ("+2 per D", "added", 6),
-        ("+3 per K", "kayak", 6),
-        ("+5 per Z", "pizzazz", 20),
-        ("+5 per Q", "cat", 0),
-        ("+1 per vowel", "education", 5),
-        ("+2 per vowel pair", "queue", 6),
+        ("+2 per S", "assess", 8),
+        ("+2 per E", "excellence", 8),
+        ("+3 per D", "added", 9),
+        ("+4 per Y", "yearly", 8),
+        ("+5 per K", "kayak", 10),
+        ("+10 per Z", "pizzazz", 40),
+        ("+10 per Q", "cat", 0),
+        ("+3 per vowel pair", "queue", 9),
         ("+3 per double letter", "bookkeeper", 9),
-        ("+3 if it ends in Y", "happy", 3),
-        ("+3 if it ends in Y", "yes", 0),
-        ("+2 if it ends in a vowel", "tree", 2),
-        ("+3 if no letter repeats", "planet", 3),
-        ("+3 if no letter repeats", "apple", 0),
     ],
 )
 def test_round_bonuses_add_what_they_say(text, word, points):
@@ -186,7 +193,7 @@ def test_round_bonuses_add_what_they_say(text, word, points):
 def test_rarer_letters_earn_more_round_bonus_points():
     value = {}
     for bonus in ROUND_BONUSES:
-        if match := re.fullmatch(r"\+(\d) per ([A-Z])", bonus.text):
+        if match := re.fullmatch(r"\+(\d+) per ([A-Z])", bonus.text):
             value[match[2].lower()] = int(match[1])
     assert sorted(value) == list("abcdefghijklmnopqrstuvwxyz")
 
@@ -195,8 +202,8 @@ def test_rarer_letters_earn_more_round_bonus_points():
 
     by_share = sorted(value, key=share, reverse=True)
     assert [value[letter] for letter in by_share] == sorted(value.values())
-    assert value["e"] == 1
-    assert value["z"] == value["q"] == 5
+    assert value["s"] == value["e"] == min(value.values()) == 2
+    assert value["z"] == value["q"] == 10
 
 
 def tier_shares(weights):
@@ -259,35 +266,49 @@ def test_words_must_meet_the_turn_challenge():
     assert game.check_word("dogs") == "must start with C"  # the usual rules come first
 
 
+@pytest.mark.parametrize(
+    ("seconds", "points"),
+    [(0, 10), (1.9, 10), (2, 9), (5, 8), (18.5, 1), (20, 0), (23.9, 0), (24.5, -1), (30.5, -7)],
+)
+def test_time_points_drop_one_every_2_seconds_then_wait_4_seconds_before_going_negative(
+    seconds, points
+):
+    assert make_game().time_points(seconds) == points
+
+
+def test_time_points_start_at_half_the_turn_time():
+    assert make_game(turn_time=30).time_points(0) == 15
+
+
 def test_meeting_the_bonus_multiplies_the_points():
     game = make_game()
     game.letter = "C"
     game.challenge = ANY_WORD
-    game.round_bonus = RoundBonus("+5 per X", lambda word: 5 * word.count("x"))
+    game.round_bonus = RoundBonus("+10 per X", lambda word: 10 * word.count("x"))
     game.bonus, game.multiplier = Challenge("include Z", lambda word: "z" in word), 2.5
 
-    assert game.score("cat", seconds=0) == 23  # 3 letters + 20 seconds left
-    assert game.score("craze", seconds=5) == round((5 + 15) * 2.5)
-    assert game.score("craze", seconds=30) == 5 - 10  # no bonus on a penalty
-    game.play("craze", seconds=5)
+    assert game.score("cat", seconds=0) == 13  # 3 letters + 10 time points
+    assert game.score("craze", seconds=6) == (5 + 7) * 2.5
+    assert game.score("craze", seconds=30) == 5 - 6  # no bonus on a penalty
+    game.play("craze", seconds=6)
     assert game.moves[-1].multiplier == 2.5
-    assert game.players[0].score == 50
+    assert game.players[0].score == 30
 
 
 def test_the_round_bonus_adds_points_before_the_multiplier():
     game = make_game()
     game.letter = "C"
     game.challenge = ANY_WORD
-    game.round_bonus = RoundBonus("+2 per C", lambda word: 2 * word.count("c"))
+    game.round_bonus = RoundBonus("+3 per C", lambda word: 3 * word.count("c"))
     game.bonus, game.multiplier = Challenge("include Z", lambda word: "z" in word), 2.0
 
-    assert game.score("cat", seconds=0) == 3 + 2 + 20
-    assert game.score("cozy", seconds=10) == (4 + 2 + 10) * 2
-    assert game.score("circus", seconds=30) == 6 + 4 - 10  # still counts when time ran out
+    assert game.score("cat", seconds=0) == 3 + 3 + 10
+    assert game.score("cozy", seconds=10) == (4 + 3 + 5) * 2
+    assert game.score("circus", seconds=30) == 6 + 6 - 6  # still counts when time ran out
     game.play("circus", seconds=4)
-    assert game.moves[-1].round_bonus == 4
-    assert game.moves[-1].time_bonus == 16
-    assert game.players[0].score == 6 + 4 + 16
+    assert game.moves[-1].round_bonus == 6
+    assert game.moves[-1].time_bonus == 8
+    assert game.players[0].score == 6 + 6 + 8
 
 
 def test_every_turn_gets_a_new_round_bonus():
@@ -302,7 +323,7 @@ def test_every_turn_gets_a_new_round_bonus():
 
 
 @pytest.mark.parametrize("challenge", ["include R", "no letter R", "end with R"])
-def test_the_challenge_never_spoils_the_round_bonus(challenge):
+def test_the_turn_never_spoils_the_round_bonus(challenge):
     game = make_game(seed=6)
     game.letter = "S"
     game.challenge = next(c for c in TURN_CHALLENGES if c.text == challenge)
@@ -310,8 +331,9 @@ def test_the_challenge_never_spoils_the_round_bonus(challenge):
     for _ in range(300):
         game.round_bonus = game._pick_round_bonus()
         picked.add(game.round_bonus.text)
-    assert "+1 per R" not in picked  # it would be ruled out, or come with every word
-    assert "+1 per S" in picked  # every word gets it, but more S's get more
+    assert "+2 per R" not in picked  # it would be ruled out, or come with every word
+    assert "+2 per S" not in picked  # every S word earns it
+    assert len(picked) > 20
 
 
 def test_has_a_longer_clock_than_classic():
@@ -368,6 +390,16 @@ def test_avoids_challenges_that_hand_out_the_game_bonus():
     picked = {game._pick_challenge().text for _ in range(300)}
     assert len(picked) > 50
     assert not picked & {"include EE", "include OO"}
+
+
+def test_turns_that_hand_out_the_game_bonus_anyway_still_get_fair_challenges():
+    game = make_game(seed=9)
+    game.letter = "Z"  # Every word for the turn earns the bonus
+    game.bonus = next(bonus for bonus in ALL_BONUSES if bonus.text == "include Z")
+    options = game._unplayed_words()
+    for _ in range(8):
+        challenge = game._pick_challenge()
+        assert MIN_CHOICES <= sum(map(challenge.test, options)) <= MAX_SHARE * len(options)
 
 
 def test_challenge_games_play_to_200():
