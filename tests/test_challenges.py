@@ -130,13 +130,13 @@ def test_game_bonuses_check_what_they_say(text, yes, no):
     assert not bonus.test(no)
 
 
-def test_game_bonus_multipliers_peak_at_two_and_stay_between_one_and_a_half_and_three():
+def test_game_bonus_multipliers_peak_at_two_and_stay_between_one_and_a_half_and_four():
     counts = {base: len(bonuses) for base, bonuses in GAME_BONUSES.items()}
     assert max(counts, key=counts.get) == 2.0
     assert counts[1.5] < counts[2.0]  # small multipliers are slightly rarer...
-    assert counts[3.0] == min(counts.values())  # ...and the biggest are rarest
+    assert counts[3.5] == min(counts.values())  # ...and the biggest are rarest
     assert MIN_MULTIPLIER == 1.5 == min(GAME_BONUSES)
-    assert MAX_MULTIPLIER == 3.0 == max(GAME_BONUSES)
+    assert max(GAME_BONUSES) == 3.5 < MAX_MULTIPLIER == 4.0  # nudged up to 4x at most
 
 
 def test_every_game_bonus_is_equally_likely_with_a_little_randomness():
@@ -150,7 +150,8 @@ def test_every_game_bonus_is_equally_likely_with_a_little_randomness():
 
     nudges = [multiplier / base_of[bonus.text] for bonus, multiplier in picks]
     assert sum(abs(nudge - 1) <= 0.2 for nudge in nudges) / len(nudges) > 0.95
-    assert all(1.5 <= multiplier <= 3.0 for _, multiplier in picks)
+    assert all(1.5 <= multiplier <= 4.0 for _, multiplier in picks)
+    assert max(multiplier for _, multiplier in picks) == 4.0
     assert all(multiplier == round(multiplier, 1) for _, multiplier in picks)
     assert len({multiplier for _, multiplier in picks}) > 10  # not just the base values
 
