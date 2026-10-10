@@ -6,15 +6,9 @@ Shiritori (しりとり) is a Japanese word-chain game: each word starts where t
 last one ended. This English version runs in your terminal. Race the clock
 against the computer, or up to 4 friends on one keyboard.
 
-```text
-+13 | Neer: Tiger  (5L + 8s)
-      Neer 13 · Computer 0
-
-+16 | Computer: Rhubarb  (7L + 9s)
-      Neer 13 · Computer 16
-
-  8 | Neer: Bana
-```
+<p align="center">
+  <img src="docs/images/demo.gif" width="756" alt="A challenge-mode game against the computer, typed live in the terminal">
+</p>
 
 ## Features
 
@@ -61,10 +55,12 @@ harder ones. Vowels are A, E, I, O, U.
 - **Time points** (`s`) start at +10 and drop 1 every 2 seconds, with 4
   seconds of grace at 0 before they go negative.
 
-```text
-REQ: include Y | +2 per S, x2.3: U is the only vowel
-+37 | Neer: Dusty  (5L + 2B + 9s) x2.3
-```
+Each line shows the REQ, then the round bonus and the game bonus. Scores
+break down as letters, bonus, and time, as in `(4L + 3B + 10s)`.
+
+<p align="center">
+  <img src="docs/images/challenge.png" width="560" alt="A full challenge-mode game, from setup to the winner">
+</p>
 
 ## Computer levels
 
@@ -90,6 +86,10 @@ each requirement.
 | `--rules`               | Explain how to play                               |
 | `--stats`               | Show your records, high scores, and best games    |
 | `--reset-stats`         | Erase your stats                                  |
+
+<p align="center">
+  <img src="docs/images/stats.png" width="560" alt="The --stats screen: records, high scores, best games, and favorite words">
+</p>
 
 Stats live in `stats.json` in the game's folder. Games with a custom target or
 turn time don't count. If you installed the command, use `shiritori` in place
