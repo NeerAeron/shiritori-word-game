@@ -181,32 +181,34 @@ def challenge_weights(difficulty: str) -> list[float]:
 # multiplier: the fewer turns that offer plenty of words for it, the more it
 # pays. None is out of reach for long, so nothing like "use all five vowels".
 GAME_BONUSES = {
-    1.5: (
+    2.0: (
         Challenge("include a double vowel", lambda word: bool(re.search(r"([aeiou])\1", word))),
         Challenge("more vowels than consonants", lambda word: 2 * _vowel_count(word) > len(word)),
         _only_vowel("e"),
         _only_vowel("a"),
     ),
-    2.0: (
+    2.4: (
         Challenge("four consonants in a row", lambda word: _has_run(word, 4, vowels=False)),
         Challenge("no A, E, or I", lambda word: not set(word) & set("aei")),
         _only_vowel("i"),
         _only_vowel("o"),
         _only_vowel("u"),
     ),
-    2.75: (
+    2.8: (
         _includes("x"),
         _includes("z"),
         _includes("q"),
     ),
-    3.5: (
+    3.3: (
         Challenge("three vowels in a row", lambda word: _has_run(word, 3, vowels=True)),
         _includes("j"),
         Challenge("two double letters", lambda word: _double_letters(word) >= 2),
     ),
 }
-MIN_MULTIPLIER = 1.5
+MIN_MULTIPLIER = 2.0
 MAX_MULTIPLIER = 4.0
+# A game's multiplier is its bonus's base plus a random lift of about this much.
+MULTIPLIER_LIFT = 0.3
 
 
 def pick_game_bonus(rng: random.Random) -> tuple[Challenge, float]:
@@ -214,8 +216,8 @@ def pick_game_bonus(rng: random.Random) -> tuple[Challenge, float]:
     base, bonus = rng.choice(
         [(base, bonus) for base, bonuses in GAME_BONUSES.items() for bonus in bonuses]
     )
-    # Nudge the multiplier by about 10% either way so no two games are quite alike.
-    multiplier = round(base * rng.lognormvariate(0, 0.1), 1)
+    # The random lift means no two games are quite alike.
+    multiplier = round(base + rng.gauss(MULTIPLIER_LIFT, 0.15), 1)
     return bonus, min(max(multiplier, MIN_MULTIPLIER), MAX_MULTIPLIER)
 
 
@@ -225,10 +227,23 @@ class RoundBonus:
 
     text: str
     points: Callable[[str], int]
+    letter: str = ""  # For a bonus per letter, the letter
+    value: int = 0  # For a bonus per letter, the points for each one
+
+    @property
+    def subject(self) -> str:
+        """What the bonus pays for, such as "E" or "vowel pair"."""
+        return self.text.partition(" per ")[2]
 
 
 def _per_letter(letter: str, value: int) -> RoundBonus:
-    return RoundBonus(f"+{value} per {letter.upper()}", lambda word: value * word.count(letter))
+    return RoundBonus(
+        f"+{value} per {letter.upper()}", lambda word: value * word.count(letter), letter, value
+    )
+
+
+# How often a letter's round bonus is worth more than usual, and by how much.
+LETTER_BONUS_BOOSTS = ((0.10, 2), (0.25, 1))
 
 
 def _vowel_pairs(word: str) -> int:
@@ -243,7 +258,7 @@ def _double_letters(word: str) -> int:
 # scores. They always stack, paying for each letter or pair: "+2 per S" is
 # worth +8 for ASSESS. Flat conditions, like "end with a vowel", are turn
 # challenges instead. Rarer letters are worth more: +2 for the commonest,
-# up to +7 for Z, X, J and Q.
+# up to +8 for Z, X, J and Q.
 ROUND_BONUSES = (
     *(_per_letter(letter, 2) for letter in "eaisrntol"),
     *(_per_letter(letter, 3) for letter in "cdumgph"),
@@ -251,7 +266,7 @@ ROUND_BONUSES = (
     RoundBonus("+4 per vowel pair", lambda word: 4 * _vowel_pairs(word)),
     RoundBonus("+4 per double letter", lambda word: 4 * _double_letters(word)),
     *(_per_letter(letter, 5) for letter in "fvkw"),
-    *(_per_letter(letter, 7) for letter in "zxjq"),
+    *(_per_letter(letter, 8) for letter in "zxjq"),
 )
 NO_ROUND_BONUS = RoundBonus("no round bonus", lambda word: 0)
 
@@ -396,13 +411,29 @@ class ChallengeGame(Game):
         """
         options = self._unplayed_words()
         matches = [word for word in options if self.challenge.test(word)] or options
-        bonuses = [bonus for bonus in ROUND_BONUSES if bonus is not self.round_bonus]
+        bonuses = [bonus for bonus in ROUND_BONUSES if bonus.subject != self.round_bonus.subject]
         self._rng.shuffle(bonuses)
-        for bonus in bonuses:
-            earned, usually = _earning_share(bonus, matches), _earning_share(bonus, options)
-            if 0 < earned <= 0.95 and earned >= usually / 4:
-                return bonus
-        return bonuses[0]
+        chosen = next(
+            (
+                bonus
+                for bonus in bonuses
+                if 0 < (earned := _earning_share(bonus, matches)) <= 0.95
+                and earned >= _earning_share(bonus, options) / 4
+            ),
+            bonuses[0],
+        )
+        return self._boost(chosen)
+
+    def _boost(self, bonus: RoundBonus) -> RoundBonus:
+        """Sometimes make a letter's bonus worth a point or two more."""
+        if not bonus.letter:
+            return bonus
+        roll = self._rng.random()
+        for chance, extra in LETTER_BONUS_BOOSTS:
+            if roll < chance:
+                return _per_letter(bonus.letter, bonus.value + extra)
+            roll -= chance
+        return bonus
 
     def _shuffled_challenges(self) -> list[Challenge]:
         """Turn challenges in a random order that favors likelier ones, skipping recent ones."""
