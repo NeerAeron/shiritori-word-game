@@ -130,16 +130,16 @@ def test_game_bonuses_check_what_they_say(text, yes, no):
     assert not bonus.test(no)
 
 
-def test_game_bonus_multipliers_peak_low_and_stay_between_two_and_four():
+def test_game_bonus_multipliers_peak_at_two_and_stay_between_one_and_a_half_and_four():
     counts = {base: len(bonuses) for base, bonuses in GAME_BONUSES.items()}
-    assert max(counts, key=counts.get) == 2.4
-    assert counts[2.0] < counts[2.4]  # the smallest multipliers are slightly rarer...
-    assert counts[3.3] == min(counts.values())  # ...and the biggest are rarest
-    assert MIN_MULTIPLIER == 2.0 == min(GAME_BONUSES)
-    assert max(GAME_BONUSES) == 3.3 < MAX_MULTIPLIER == 4.0  # lifted up to 4x at most
+    assert max(counts, key=counts.get) == 2.0
+    assert counts[1.6] < counts[2.0]  # the smallest multipliers are slightly rarer...
+    assert counts[3.2] == min(counts.values())  # ...and the biggest are rarest
+    assert MIN_MULTIPLIER == 1.5 < min(GAME_BONUSES)
+    assert max(GAME_BONUSES) == 3.2 < MAX_MULTIPLIER == 4.0
 
 
-def test_every_game_bonus_is_equally_likely_with_a_random_lift():
+def test_every_game_bonus_is_equally_likely_with_a_little_randomness():
     rng = random.Random(1)
     picks = [pick_game_bonus(rng) for _ in range(30_000)]
     base_of = {bonus.text: base for base, bonuses in GAME_BONUSES.items() for bonus in bonuses}
@@ -148,12 +148,13 @@ def test_every_game_bonus_is_equally_likely_with_a_random_lift():
     assert len(counts) == 15
     assert all(1800 <= count <= 2200 for count in counts.values())  # about 2,000 each
 
-    lifts = [multiplier - base_of[bonus.text] for bonus, multiplier in picks]
-    assert sum(lifts) / len(lifts) == pytest.approx(0.3, abs=0.02)  # centered on +0.3
-    assert all(2.0 <= multiplier <= 4.0 for _, multiplier in picks)
-    assert max(multiplier for _, multiplier in picks) == 4.0
-    assert all(multiplier == round(multiplier, 1) for _, multiplier in picks)
-    assert len({multiplier for _, multiplier in picks}) > 10  # not just the base values
+    multipliers = sorted(multiplier for _, multiplier in picks)
+    nudges = [multiplier - base_of[bonus.text] for bonus, multiplier in picks]
+    assert sum(nudges) / len(nudges) == pytest.approx(0, abs=0.02)  # centered on the base
+    assert 1.9 <= multipliers[len(multipliers) // 2] <= 2.1  # the median game pays about 2x
+    assert all(1.5 <= multiplier <= 4.0 for multiplier in multipliers)
+    assert all(multiplier == round(multiplier, 1) for multiplier in multipliers)
+    assert len(set(multipliers)) > 10  # not just the base values
 
 
 def test_letter_bonuses_are_sometimes_worth_one_or_two_more():

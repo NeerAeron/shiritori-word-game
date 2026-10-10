@@ -57,7 +57,7 @@ harder ones. Vowels are A, E, I, O, U.
 - **Round bonus:** new each turn and stacking, such as *+2 per S* (*assess*
   earns +8). Letter bonuses are sometimes worth 1 or 2 more. Shown as `B`.
 - **Game bonus:** one per game, such as *include Q*. Words that meet it score
-  2x–4x, more for harder bonuses.
+  1.5x–4x, more for harder bonuses.
 - **Time points** (`s`) start at +10 and drop 1 every 2 seconds, with 4
   seconds of grace at 0 before they go negative.
 
