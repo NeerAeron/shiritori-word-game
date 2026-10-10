@@ -183,8 +183,8 @@ def test_round_bonuses_always_stack(bonus):
         ("+4 per vowel pair", "queue", 12),
         ("+4 per double letter", "bookkeeper", 12),
         ("+5 per K", "kayak", 10),
-        ("+7 per Z", "pizzazz", 28),
-        ("+7 per Q", "cat", 0),
+        ("+8 per Z", "pizzazz", 32),
+        ("+8 per Q", "cat", 0),
     ],
 )
 def test_round_bonuses_add_what_they_say(text, word, points):
@@ -205,7 +205,7 @@ def test_rarer_letters_earn_more_round_bonus_points():
     by_share = sorted(value, key=share, reverse=True)
     assert [value[letter] for letter in by_share] == sorted(value.values())
     assert value["s"] == value["e"] == min(value.values()) == 2
-    assert value["z"] == value["q"] == max(value.values()) == 7
+    assert value["z"] == value["q"] == max(value.values()) == 8
 
 
 def tier_shares(weights):

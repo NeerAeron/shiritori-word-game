@@ -457,7 +457,7 @@ def test_the_countdown_turns_yellow_then_red(game_type, elapsed, tone):
 def challenge_turn(challenge, round_bonus=None, bonus="include Q", multiplier=1.9):
     game = ChallengeGame([Player("Ann"), Player("Bob")], WordList.default(), rng=random.Random(0))
     game.challenge = Challenge(challenge, lambda word: True)
-    game.round_bonus = round_bonus or RoundBonus("+7 per X", lambda word: 0)
+    game.round_bonus = round_bonus or RoundBonus("+8 per X", lambda word: 0)
     game.bonus, game.multiplier = Challenge(bonus, lambda word: False), multiplier
     return game
 
@@ -465,7 +465,7 @@ def challenge_turn(challenge, round_bonus=None, bonus="include Q", multiplier=1.
 def test_the_requirement_and_bonuses_share_a_line():
     game = challenge_turn("end with N", bonus="four consonants in a row")
     assert cli.requirement_lines(game) == [
-        "REQ: end with N | +7 per X, x1.9: four consonants in a row"
+        "REQ: end with N | +8 per X, x1.9: four consonants in a row"
     ]
     game.round_bonus = NO_ROUND_BONUS
     assert cli.requirement_lines(game) == ["REQ: end with N | x1.9: four consonants in a row"]
@@ -489,7 +489,7 @@ def test_the_requirement_line_picks_out_what_the_bonuses_are_for():
     line = cli.requirement_lines(challenge_turn("no E", bonus="O is the only vowel"))[0]
     assert line == (
         "\x1b[1mREQ: no E\x1b[0m \x1b[2m|\x1b[0m "
-        "+7 per \x1b[35mX\x1b[0m, x1.9: \x1b[35mO is the only vowel\x1b[0m"
+        "+8 per \x1b[35mX\x1b[0m, x1.9: \x1b[35mO is the only vowel\x1b[0m"
     )
     animal = "hide an animal (ANT, BAT, CAT, COW, DOG, HEN, OWL, PIG, RAT)"
     vowel_pair = RoundBonus("+4 per vowel pair", lambda word: 0)

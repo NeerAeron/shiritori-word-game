@@ -243,7 +243,7 @@ def _double_letters(word: str) -> int:
 # scores. They always stack, paying for each letter or pair: "+2 per S" is
 # worth +8 for ASSESS. Flat conditions, like "end with a vowel", are turn
 # challenges instead. Rarer letters are worth more: +2 for the commonest,
-# up to +7 for Z, X, J and Q.
+# up to +8 for Z, X, J and Q.
 ROUND_BONUSES = (
     *(_per_letter(letter, 2) for letter in "eaisrntol"),
     *(_per_letter(letter, 3) for letter in "cdumgph"),
@@ -251,7 +251,7 @@ ROUND_BONUSES = (
     RoundBonus("+4 per vowel pair", lambda word: 4 * _vowel_pairs(word)),
     RoundBonus("+4 per double letter", lambda word: 4 * _double_letters(word)),
     *(_per_letter(letter, 5) for letter in "fvkw"),
-    *(_per_letter(letter, 7) for letter in "zxjq"),
+    *(_per_letter(letter, 8) for letter in "zxjq"),
 )
 NO_ROUND_BONUS = RoundBonus("no round bonus", lambda word: 0)
 
