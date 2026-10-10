@@ -49,11 +49,11 @@ class Difficulty:
     tactics: float = 0  # How hard it tries to leave the next player an awkward letter
 
 
-# Word lengths were tuned in simulations against intermediate (beginner) and
+# Classic mode was tuned in simulations against intermediate (beginner) and
 # experienced (other levels) players. Harder levels then got quicker thinking
-# and tactics, so they're tougher than those original targets. In challenge
-# mode, an intermediate player beats beginner about 75% of the time and an
-# experienced player beats easy about 60% of the time.
+# and tactics, so they're tougher than those original targets. Challenge mode
+# is tuned against an intermediate player, who averages about 15 points a
+# word there: they beat the levels about 90%, 75%, 50%, 25% and 3% of the time.
 DIFFICULTIES = {
     difficulty.name: difficulty
     for difficulty in (
@@ -64,11 +64,12 @@ DIFFICULTIES = {
             mean_length=4.5,
             stdev=0.8,
             thinking=0.8,
-            challenge_thinking=3.6,
+            challenge_thinking=4.3,
             spread=0.5,
             typing=0.3,
             bonus_chance=0.05,
             round_bonus_chance=0.1,
+            challenge_length_shift=-2,
         ),
         Difficulty(
             "easy",
@@ -77,11 +78,12 @@ DIFFICULTIES = {
             mean_length=7,
             stdev=1.2,
             thinking=1.2,
-            challenge_thinking=3.5,
+            challenge_thinking=5.5,
             spread=0.8,
             typing=0.25,
             bonus_chance=0.1,
             round_bonus_chance=0.4,
+            challenge_length_shift=-4,
         ),
         Difficulty(
             "medium",
@@ -90,11 +92,12 @@ DIFFICULTIES = {
             mean_length=9,
             stdev=1.3,
             thinking=1.9,
-            challenge_thinking=2.8,
+            challenge_thinking=5.2,
             spread=0.8,
             typing=0.22,
             bonus_chance=0.1,
             round_bonus_chance=0.4,
+            challenge_length_shift=-4,
             tactics=0.25,
         ),
         Difficulty(
@@ -104,11 +107,12 @@ DIFFICULTIES = {
             mean_length=12,
             stdev=2,
             thinking=2.3,
-            challenge_thinking=2.0,
+            challenge_thinking=5.0,
             spread=0.5,
             typing=0.2,
-            bonus_chance=0.2,
+            bonus_chance=0.12,
             round_bonus_chance=0.6,
+            challenge_length_shift=-7,
             tactics=0.6,
         ),
         Difficulty(
@@ -118,11 +122,12 @@ DIFFICULTIES = {
             mean_length=13,
             stdev=2,
             thinking=1.9,
-            challenge_thinking=1.6,
+            challenge_thinking=4.0,
             spread=0.45,
             typing=0.17,
-            bonus_chance=0.7,
+            bonus_chance=0.25,
             round_bonus_chance=0.8,
+            challenge_length_shift=-5,
             tactics=1.0,
         ),
     )

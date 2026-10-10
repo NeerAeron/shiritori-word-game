@@ -22,7 +22,14 @@ WORDS = WordList.default()
 
 
 def custom_difficulty(**changes):
-    settings = {"name": "test", "min_length": 3, "max_length": 9, "mean_length": 5, "stdev": 1}
+    settings = {
+        "name": "test",
+        "min_length": 3,
+        "max_length": 9,
+        "mean_length": 5,
+        "stdev": 1,
+        "challenge_length_shift": 0,
+    }
     return replace(DIFFICULTIES["medium"], **(settings | changes))
 
 
@@ -202,17 +209,43 @@ def test_typing_speed_sets_the_pause_between_letters():
     assert sum(fast[:-1]) / 100 == pytest.approx(0.1, rel=0.15)
 
 
-@pytest.mark.parametrize(
-    ("game_type", "thinking"), [(Game, "thinking"), (ChallengeGame, "challenge_thinking")]
-)
-def test_harder_computers_score_more_per_turn(game_type, thinking):
-    game = game_type([Player("Ann"), Player("Bob")], WORDS, rng=random.Random(0))
+@pytest.mark.parametrize("game_type", [Game, ChallengeGame])
+def test_harder_computers_score_more_per_turn(game_type):
+    def average_points(difficulty):
+        rng = random.Random(0)
+        game = game_type([Player("Ann"), Player("Bob")], WORDS, rng=random.Random(0))
+        points = []
+        for letter in "STECRDPB":
+            game.letter = letter
+            if isinstance(game, ChallengeGame):
+                game.challenge = ANY_WORD
+                game.round_bonus = game._pick_round_bonus()
+            for _ in range(25):
+                word = choose_word(game, difficulty, rng)
+                thinking = thinking_time(game, difficulty, word, rng)
+                seconds = sum(typing_delays(word, rng, thinking, difficulty.typing))
+                points.append(game.score(word, seconds))
+        return sum(points) / len(points)
 
-    def expected_points(d):
-        return d.mean_length + game.time_points(getattr(d, thinking) + d.mean_length * d.typing)
-
-    points = [expected_points(d) for d in DIFFICULTIES.values()]
+    points = [average_points(d) for d in DIFFICULTIES.values()]
     assert points == sorted(points)
     for chance in ("bonus_chance", "round_bonus_chance"):
         chances = [getattr(d, chance) for d in DIFFICULTIES.values()]
         assert chances == sorted(chances)
+
+
+def test_challenge_mode_can_shorten_the_computers_words():
+    words = WordList.default()
+    shorter = custom_difficulty(
+        min_length=8, max_length=10, mean_length=9, challenge_length_shift=-4
+    )
+
+    def average_length(game_type):
+        rng = random.Random(0)
+        game = game_type([Player("Ann"), Player("Bob")], words, rng=random.Random(0))
+        game.letter = "S"
+        if game_type is ChallengeGame:
+            game.challenge = ANY_WORD
+        return sum(len(choose_word(game, shorter, rng)) for _ in range(60)) / 60
+
+    assert average_length(ChallengeGame) < average_length(Game) - 3
