@@ -194,19 +194,19 @@ GAME_BONUSES = {
         _only_vowel("o"),
         _only_vowel("u"),
     ),
-    2.5: (
+    2.75: (
         _includes("x"),
         _includes("z"),
         _includes("q"),
     ),
-    3.0: (
+    3.5: (
         Challenge("three vowels in a row", lambda word: _has_run(word, 3, vowels=True)),
         _includes("j"),
         Challenge("two double letters", lambda word: _double_letters(word) >= 2),
     ),
 }
 MIN_MULTIPLIER = 1.5
-MAX_MULTIPLIER = 3.0
+MAX_MULTIPLIER = 4.0
 
 
 def pick_game_bonus(rng: random.Random) -> tuple[Challenge, float]:
