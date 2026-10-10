@@ -181,34 +181,32 @@ def challenge_weights(difficulty: str) -> list[float]:
 # multiplier: the fewer turns that offer plenty of words for it, the more it
 # pays. None is out of reach for long, so nothing like "use all five vowels".
 GAME_BONUSES = {
-    2.0: (
+    1.6: (
         Challenge("include a double vowel", lambda word: bool(re.search(r"([aeiou])\1", word))),
         Challenge("more vowels than consonants", lambda word: 2 * _vowel_count(word) > len(word)),
         _only_vowel("e"),
         _only_vowel("a"),
     ),
-    2.4: (
+    2.0: (
         Challenge("four consonants in a row", lambda word: _has_run(word, 4, vowels=False)),
         Challenge("no A, E, or I", lambda word: not set(word) & set("aei")),
         _only_vowel("i"),
         _only_vowel("o"),
         _only_vowel("u"),
     ),
-    2.8: (
+    2.5: (
         _includes("x"),
         _includes("z"),
         _includes("q"),
     ),
-    3.3: (
+    3.2: (
         Challenge("three vowels in a row", lambda word: _has_run(word, 3, vowels=True)),
         _includes("j"),
         Challenge("two double letters", lambda word: _double_letters(word) >= 2),
     ),
 }
-MIN_MULTIPLIER = 2.0
+MIN_MULTIPLIER = 1.5
 MAX_MULTIPLIER = 4.0
-# A game's multiplier is its bonus's base plus a random lift of about this much.
-MULTIPLIER_LIFT = 0.3
 
 
 def pick_game_bonus(rng: random.Random) -> tuple[Challenge, float]:
@@ -216,8 +214,8 @@ def pick_game_bonus(rng: random.Random) -> tuple[Challenge, float]:
     base, bonus = rng.choice(
         [(base, bonus) for base, bonuses in GAME_BONUSES.items() for bonus in bonuses]
     )
-    # The random lift means no two games are quite alike.
-    multiplier = round(base + rng.gauss(MULTIPLIER_LIFT, 0.15), 1)
+    # A small random nudge either way, so no two games are quite alike.
+    multiplier = round(base + rng.gauss(0, 0.15), 1)
     return bonus, min(max(multiplier, MIN_MULTIPLIER), MAX_MULTIPLIER)
 
 
