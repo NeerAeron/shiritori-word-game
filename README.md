@@ -20,7 +20,7 @@ against the computer, or up to 4 friends on one keyboard.
 
 - **Two modes:** classic, and challenge mode with new requirements and bonuses every turn
 - **Five computer levels**, from beginner to impossible
-- **Fair turns** and **saved stats** (records, high scores, favorite words)
+- **Fair turns** and **saved stats** (records, high scores, best games, favorite words)
 - **A few colors** where your terminal supports them (`NO_COLOR` turns them off)
 - **No dependencies:** Python 3.10+ on Linux, macOS, or Windows
 
@@ -68,16 +68,18 @@ REQ: include Y | +2 per S, x2.3: U is the only vowel
 
 ## Computer levels
 
-| Level      | Word length | Plays tactically |
-| ---------- | ----------- | ---------------- |
-| beginner   | 3–6         | no               |
-| easy       | 5–9         | no               |
-| medium     | 7–11        | a little         |
-| hard       | 9–15        | more             |
-| impossible | 10–16       | the most         |
+| Level      | Word length (classic) | Plays tactically |
+| ---------- | --------------------- | ---------------- |
+| beginner   | 3–6                   | no               |
+| easy       | 5–9                   | no               |
+| medium     | 7–12                  | a little         |
+| hard       | 9–16                  | more             |
+| impossible | 10–16                 | the most         |
 
 Like a person, the computer is quicker with easy letters like S. Harder levels
-try to leave you awkward letters and go for bonuses more often.
+try to leave you awkward letters and go for bonuses more often. In challenge
+mode every level plays shorter words and thinks longer, like a person meeting
+each requirement.
 
 ## Options
 
@@ -86,7 +88,7 @@ try to leave you awkward letters and go for bonuses more often.
 | `--target-score POINTS` | Points to win (default 100, or 150 in challenge)  |
 | `--turn-time SECONDS`   | Seconds per turn (default 10, or 20 in challenge) |
 | `--rules`               | Explain how to play                               |
-| `--stats`               | Show your records, high scores, and word stats    |
+| `--stats`               | Show your records, high scores, and best games    |
 | `--reset-stats`         | Erase your stats                                  |
 
 Stats live in `stats.json` in the game's folder. Games with a custom target or

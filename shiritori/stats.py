@@ -67,12 +67,24 @@ class HighScore:
     date: str  # YYYY-MM-DD
 
 
+@dataclass(frozen=True)
+class BestGame:
+    """A player's game, ranked by the average points of their words."""
+
+    average: float
+    words: int
+    player: str
+    opponent: str  # A difficulty name, or MULTIPLAYER
+    date: str  # YYYY-MM-DD
+
+
 @dataclass
 class GameReport:
     """What a newly recorded game changed."""
 
     high_score_ranks: list[int]  # Ranks (from 1) its words reached in the high scores
     longest_word: str | None  # Set if it beat the previous longest word
+    best_game: BestGame | None = None  # Set if it beat the previous best game
 
 
 @dataclass
@@ -85,6 +97,8 @@ class Stats:
     high_scores: dict[str, list[HighScore]] = field(default_factory=dict)
     # Every word people have played -> how many times, in the order first played
     words: dict[str, int] = field(default_factory=dict)
+    # Mode -> the game with the best average points a word
+    best_games: dict[str, BestGame] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: Path) -> Stats:
@@ -126,6 +140,17 @@ class Stats:
                     for mode, entries in data["high_scores"].items()
                 },
                 words={str(word): int(count) for word, count in data["words"].items()},
+                # Files saved before best games were kept don't have them.
+                best_games={
+                    mode: BestGame(
+                        average=float(entry["average"]),
+                        words=int(entry["words"]),
+                        player=str(entry["player"]),
+                        opponent=str(entry["opponent"]),
+                        date=str(entry["date"]),
+                    )
+                    for mode, entry in data.get("best_games", {}).items()
+                },
             )
         except (AttributeError, KeyError, TypeError, ValueError) as error:
             raise StatsError(f"{path} isn't a valid stats file ({error}).") from error
@@ -143,6 +168,7 @@ class Stats:
                 for mode, entries in self.high_scores.items()
             },
             "words": self.words,
+            "best_games": {mode: asdict(best) for mode, best in self.best_games.items()},
         }
         # Write to a temporary file first so a crash can't leave a half-written file behind.
         temporary = path.with_name(path.name + ".tmp")
@@ -187,7 +213,22 @@ class Stats:
         )[:HIGH_SCORE_COUNT]
         self.high_scores[game.mode] = ranked
 
+        new_best = None
+        for player in {move.player.name: move.player for move in moves}.values():
+            points = [move.points for move in moves if move.player is player]
+            best = BestGame(
+                round(sum(points) / len(points), 1),
+                len(points),
+                player.name,
+                opponent,
+                today.isoformat(),
+            )
+            previous = self.best_games.get(game.mode)
+            if previous is None or best.average > previous.average:
+                self.best_games[game.mode] = new_best = best
+
         return GameReport(
+            best_game=new_best,
             high_score_ranks=[
                 rank for rank, entry in enumerate(ranked, 1) if any(entry is play for play in plays)
             ],
@@ -279,6 +320,8 @@ def format_stats(stats: Stats) -> str:
 
     for mode in MODES:
         lines += ["", paint(f"{mode.title()} high scores", "bold")]
+        if best := stats.best_games.get(mode):
+            lines.append(f"  {paint('Best game:', 'dim')} {describe_best_game(best)}")
         entries = stats.high_scores.get(mode, [])
         if entries:
             rows = [
@@ -289,6 +332,14 @@ def format_stats(stats: Stats) -> str:
         else:
             lines.append("  " + paint("None yet.", "dim"))
     return "\n".join(lines)
+
+
+def describe_best_game(best: BestGame) -> str:
+    """Such as "18.4 points a word (Neer vs hard, 9 words, 2026-10-10)"."""
+    return (
+        f"{best.average:g} points a word "
+        f"({best.player} vs {best.opponent}, {_words(best.words)}, {best.date})"
+    )
 
 
 def _times(count: int) -> str:

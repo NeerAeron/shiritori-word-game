@@ -291,6 +291,7 @@ def test_record_stats_saves_the_game_and_announces_news(stats_file, capsys):
     assert stats.words == {"apple": 1, "giraffe": 1}
     output = capsys.readouterr().out
     assert "  New high score #1: Giraffe (17)" in output
+    assert "  New best game: 16 points a word" in output
     assert "Record vs hard: 1 won, 0 lost" in output
     assert "New longest word" not in output  # nothing to beat yet
     assert f"All stats: {cli.program_name()} --stats" in output

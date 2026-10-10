@@ -13,6 +13,7 @@ from shiritori.game import Game, Player
 from shiritori.stats import (
     HIGH_SCORE_COUNT,
     MULTIPLAYER,
+    BestGame,
     HighScore,
     Record,
     Stats,
@@ -275,3 +276,32 @@ def test_a_full_high_score_table_stays_lined_up(colors):
     assert report[header].startswith("   #  Points  Word")
     assert report[header + 1].startswith("   1     100  word0")
     assert report[header + 10].startswith("  10      91  word9")
+
+
+def test_keeps_the_best_game_by_average_points_a_word(stats_file):
+    stats = Stats()
+    report = stats.record_game(you_beat_the_computer(), TODAY)  # Neer: apple 15, giraffe 17
+    best = BestGame(16.0, 2, "Neer", "medium", "2026-10-08")
+    assert stats.best_games == {"classic": best}
+    assert report.best_game == best
+
+    later = date(2026, 10, 9)
+    assert stats.record_game(the_computer_beats_you(), later).best_game is None  # egg: 13
+    assert stats.best_games["classic"] == best
+
+    stats.save(stats_file)
+    assert Stats.load(stats_file).best_games == {"classic": best}
+
+
+def test_older_stats_files_have_no_best_games_yet(stats_file):
+    Stats(words={"egg": 1}).save(stats_file)
+    data = json.loads(stats_file.read_text())
+    del data["best_games"]
+    stats_file.write_text(json.dumps(data))
+    assert Stats.load(stats_file).best_games == {}
+
+
+def test_format_stats_shows_the_best_game():
+    stats = Stats(best_games={"challenge": BestGame(18.4, 9, "Neer", "hard", "2026-10-10")})
+    report = format_stats(stats)
+    assert "Challenge high scores\n  Best game: 18.4 points a word (Neer vs hard, 9 words" in report

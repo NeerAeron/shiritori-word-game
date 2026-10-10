@@ -299,7 +299,7 @@ def show_header(game: Game) -> None:
 def show_bonus(game: ChallengeGame, sleep: Callable[[float], None], seconds: int = 5) -> None:
     """Announce the game bonus, and give players a moment to read it."""
     print(
-        f"{paint(f'GAME BONUS x{game.multiplier:g}', 'magenta')}: {paint(game.bonus.text, 'bold')}"
+        f"{paint('GAME BONUS', 'bold')} x{game.multiplier:g}: {paint(game.bonus.text, 'magenta')}"
     )
     for left in range(seconds, 0, -1):
         print("\r" + paint(f"Starting in {left}...", "dim"), end="", flush=True)
@@ -409,6 +409,9 @@ def record_stats(game: Game, path: Path) -> None:
         best = stats.high_scores[game.mode][rank - 1]
         label = paint(f"New high score #{rank}:", "green")
         print(f"  {label} {capitalized(best.word)} ({best.points})")
+    if report.best_game:
+        label = paint("New best game:", "green")
+        print(f"  {label} {report.best_game.average:g} points a word")
     if report.longest_word:
         print(f"  {paint('New longest word:', 'green')} {capitalized(report.longest_word)}")
     for player in game.players:
