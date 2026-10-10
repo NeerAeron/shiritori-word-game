@@ -85,10 +85,6 @@ each requirement.
 | `--stats`               | Show your records, high scores, and best games    |
 | `--reset-stats`         | Erase your stats                                  |
 
-<p align="center">
-  <img src="docs/images/stats.png" width="560" alt="The --stats screen: records, high scores, best games, and favorite words">
-</p>
-
 Stats live in `stats.json` in the game's folder. Games with a custom target or
 turn time don't count. If you installed the command, use `shiritori` in place
 of `python play.py`.
