@@ -55,12 +55,10 @@ harder ones. Vowels are A, E, I, O, U.
 - **Time points** (`s`) start at +10 and drop 1 every 2 seconds, with 4
   seconds of grace at 0 before they go negative.
 
-Each line shows the REQ, then the round bonus and the game bonus. Scores
-break down as letters, bonus, and time, as in `(4L + 3B + 10s)`.
-
-<p align="center">
-  <img src="docs/images/challenge.png" width="560" alt="A full challenge-mode game, from setup to the winner">
-</p>
+```text
+REQ: include Y | +2 per S, x2.3: U is the only vowel
++37 | Neer: Dusty  (5L + 2B + 9s) x2.3
+```
 
 ## Computer levels
 
