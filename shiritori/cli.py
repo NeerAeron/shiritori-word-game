@@ -276,13 +276,14 @@ def result_line(move: Move) -> str:
 def requirement_lines(game: ChallengeGame) -> list[str]:
     """The turn's requirement and bonuses, on one line if they fit.
 
-    For example "REQ: no E | +3 per G, x1.9: O is the only vowel", with what
-    each bonus is for (G, and O is the only vowel) picked out in color.
+    For example "REQ: no E | +3 per G, x1.9: O is the only vowel", with the
+    points in green and what each bonus is for (G, and O is the only vowel)
+    in magenta.
     """
     bonuses = []
     if game.round_bonus is not NO_ROUND_BONUS:
         amount, _, subject = game.round_bonus.text.partition(" per ")
-        bonuses.append(f"{amount} per {paint(subject, 'magenta')}")
+        bonuses.append(f"{paint(amount, 'green')} per {paint(subject, 'magenta')}")
     bonuses.append(f"x{game.multiplier:g}: {paint(game.bonus.text, 'magenta')}")
     requirement = paint(f"REQ: {game.challenge.text}", "bold")
     one_line = f"{requirement} {paint('|', 'dim')} {', '.join(bonuses)}"

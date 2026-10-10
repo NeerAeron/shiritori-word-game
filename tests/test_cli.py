@@ -489,12 +489,12 @@ def test_the_requirement_line_picks_out_what_the_bonuses_are_for():
     line = cli.requirement_lines(challenge_turn("no E", bonus="O is the only vowel"))[0]
     assert line == (
         "\x1b[1mREQ: no E\x1b[0m \x1b[2m|\x1b[0m "
-        "+8 per \x1b[35mX\x1b[0m, x1.9: \x1b[35mO is the only vowel\x1b[0m"
+        "\x1b[32m+8\x1b[0m per \x1b[35mX\x1b[0m, x1.9: \x1b[35mO is the only vowel\x1b[0m"
     )
     animal = "hide an animal (ANT, BAT, CAT, COW, DOG, HEN, OWL, PIG, RAT)"
     vowel_pair = RoundBonus("+4 per vowel pair", lambda word: 0)
     second = cli.requirement_lines(challenge_turn(animal, vowel_pair))[1]
-    assert second.startswith("     +4 per \x1b[35mvowel pair\x1b[0m, x1.9: ")
+    assert second.startswith("     \x1b[32m+4\x1b[0m per \x1b[35mvowel pair\x1b[0m, x1.9: ")
 
 
 def test_the_scoreboard_lists_everyone_in_seating_order():
