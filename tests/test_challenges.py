@@ -84,7 +84,7 @@ def test_game_bonuses_are_never_out_of_reach_for_long(bonus):
     [
         ("end with S", "cats", "cat"),
         ("include a double letter", "apple", "ape"),
-        ("no letter E", "cat", "tree"),
+        ("no E", "cat", "tree"),
         ("exactly one vowel", "strength", "banana"),
         ("use the first letter again", "dad", "dog"),
         ("alternate consonants and vowels", "banana", "bread"),
@@ -94,7 +94,7 @@ def test_game_bonuses_are_never_out_of_reach_for_long(bonus):
         ("end with two consonants", "hand", "hello"),
         ("end with a vowel and include a double letter", "coffee", "coffees"),
         ("use one letter three times", "banana", "band"),
-        ("no letter A or E", "song", "sang"),
+        ("no A or E", "song", "sang"),
         ("hide the word ICE", "office", "offer"),
     ],
 )
@@ -332,7 +332,7 @@ def test_every_turn_gets_a_new_round_bonus():
     assert len(set(bonuses)) > 20
 
 
-@pytest.mark.parametrize("challenge", ["include R", "no letter R", "end with R"])
+@pytest.mark.parametrize("challenge", ["include R", "no R", "end with R"])
 def test_the_turn_never_spoils_the_round_bonus(challenge):
     game = make_game(seed=6)
     game.letter = "S"

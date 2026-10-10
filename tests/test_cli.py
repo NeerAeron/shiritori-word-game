@@ -220,7 +220,7 @@ def test_challenge_mode_with_people_at_the_keyboard(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Challenge mode: playing to 40 points\nGAME BONUS x2: include G\n" in output
     assert "Starting in 1..." in output
-    assert "\nREQ: end with E | Bonuses: +3 per L, x2: include G\n" in output
+    assert "\nREQ: end with E | +3 per L, x2: include G\n" in output
     assert "+10 | Ann: Apple" in output  # the countdown shows time points
     assert "Ant  (doesn't meet the REQ)" in output
     assert "+18 | Ann: Apple  (5L + 3B + 10s)\n" in output
@@ -291,6 +291,7 @@ def test_record_stats_saves_the_game_and_announces_news(stats_file, capsys):
     assert stats.words == {"apple": 1, "giraffe": 1}
     output = capsys.readouterr().out
     assert "  New high score #1: Giraffe (17)" in output
+    assert "  New best game: 16 points a word" in output
     assert "Record vs hard: 1 won, 0 lost" in output
     assert "New longest word" not in output  # nothing to beat yet
     assert f"All stats: {cli.program_name()} --stats" in output
@@ -464,12 +465,10 @@ def challenge_turn(challenge, round_bonus=None, bonus="include Q", multiplier=1.
 def test_the_requirement_and_bonuses_share_a_line():
     game = challenge_turn("end with N", bonus="four consonants in a row")
     assert cli.requirement_lines(game) == [
-        "REQ: end with N | Bonuses: +7 per X, x1.9: four consonants in a row"
+        "REQ: end with N | +7 per X, x1.9: four consonants in a row"
     ]
     game.round_bonus = NO_ROUND_BONUS
-    assert cli.requirement_lines(game) == [
-        "REQ: end with N | Bonuses: x1.9: four consonants in a row"
-    ]
+    assert cli.requirement_lines(game) == ["REQ: end with N | x1.9: four consonants in a row"]
 
 
 def test_a_long_requirement_puts_the_bonuses_on_their_own_line():
@@ -480,16 +479,22 @@ def test_a_long_requirement_puts_the_bonuses_on_their_own_line():
     lines = cli.requirement_lines(game)
     assert lines == [
         f"REQ: {animal}",
-        "     Bonuses: +4 per vowel pair, x1.9: two double letters",
+        "     +4 per vowel pair, x1.9: two double letters",
     ]
     assert all(len(line) <= 79 for line in lines)
 
 
-def test_the_requirement_line_gets_colors():
+def test_the_requirement_line_picks_out_what_the_bonuses_are_for():
     style.use_colors(True)
-    line = cli.requirement_lines(challenge_turn("end with N"))[0]
-    assert line.startswith("\x1b[1mREQ: end with N\x1b[0m \x1b[2m| Bonuses:\x1b[0m")
-    assert "\x1b[35m+7 per X\x1b[0m, \x1b[35mx1.9\x1b[0m: include Q" in line
+    line = cli.requirement_lines(challenge_turn("no E", bonus="O is the only vowel"))[0]
+    assert line == (
+        "\x1b[1mREQ: no E\x1b[0m \x1b[2m|\x1b[0m "
+        "+7 per \x1b[35mX\x1b[0m, x1.9: \x1b[35mO is the only vowel\x1b[0m"
+    )
+    animal = "hide an animal (ANT, BAT, CAT, COW, DOG, HEN, OWL, PIG, RAT)"
+    vowel_pair = RoundBonus("+4 per vowel pair", lambda word: 0)
+    second = cli.requirement_lines(challenge_turn(animal, vowel_pair))[1]
+    assert second.startswith("     +4 per \x1b[35mvowel pair\x1b[0m, x1.9: ")
 
 
 def test_the_scoreboard_lists_everyone_in_seating_order():
