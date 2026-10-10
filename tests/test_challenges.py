@@ -130,16 +130,16 @@ def test_game_bonuses_check_what_they_say(text, yes, no):
     assert not bonus.test(no)
 
 
-def test_game_bonus_multipliers_peak_at_two_and_stay_between_one_and_a_half_and_four():
+def test_game_bonus_multipliers_peak_low_and_stay_between_two_and_four():
     counts = {base: len(bonuses) for base, bonuses in GAME_BONUSES.items()}
-    assert max(counts, key=counts.get) == 2.0
-    assert counts[1.5] < counts[2.0]  # small multipliers are slightly rarer...
-    assert counts[3.5] == min(counts.values())  # ...and the biggest are rarest
-    assert MIN_MULTIPLIER == 1.5 == min(GAME_BONUSES)
-    assert max(GAME_BONUSES) == 3.5 < MAX_MULTIPLIER == 4.0  # nudged up to 4x at most
+    assert max(counts, key=counts.get) == 2.4
+    assert counts[2.0] < counts[2.4]  # the smallest multipliers are slightly rarer...
+    assert counts[3.3] == min(counts.values())  # ...and the biggest are rarest
+    assert MIN_MULTIPLIER == 2.0 == min(GAME_BONUSES)
+    assert max(GAME_BONUSES) == 3.3 < MAX_MULTIPLIER == 4.0  # lifted up to 4x at most
 
 
-def test_every_game_bonus_is_equally_likely_with_a_little_randomness():
+def test_every_game_bonus_is_equally_likely_with_a_random_lift():
     rng = random.Random(1)
     picks = [pick_game_bonus(rng) for _ in range(30_000)]
     base_of = {bonus.text: base for base, bonuses in GAME_BONUSES.items() for bonus in bonuses}
@@ -148,12 +148,29 @@ def test_every_game_bonus_is_equally_likely_with_a_little_randomness():
     assert len(counts) == 15
     assert all(1800 <= count <= 2200 for count in counts.values())  # about 2,000 each
 
-    nudges = [multiplier / base_of[bonus.text] for bonus, multiplier in picks]
-    assert sum(abs(nudge - 1) <= 0.2 for nudge in nudges) / len(nudges) > 0.95
-    assert all(1.5 <= multiplier <= 4.0 for _, multiplier in picks)
+    lifts = [multiplier - base_of[bonus.text] for bonus, multiplier in picks]
+    assert sum(lifts) / len(lifts) == pytest.approx(0.3, abs=0.02)  # centered on +0.3
+    assert all(2.0 <= multiplier <= 4.0 for _, multiplier in picks)
     assert max(multiplier for _, multiplier in picks) == 4.0
     assert all(multiplier == round(multiplier, 1) for _, multiplier in picks)
     assert len({multiplier for _, multiplier in picks}) > 10  # not just the base values
+
+
+def test_letter_bonuses_are_sometimes_worth_one_or_two_more():
+    game = make_game(seed=12)
+    extras = Counter()
+    for _ in range(600):
+        game.round_bonus = game._pick_round_bonus()
+        if game.round_bonus.letter:
+            base = next(b for b in ROUND_BONUSES if b.letter == game.round_bonus.letter)
+            extras[game.round_bonus.value - base.value] += 1
+            assert game.round_bonus.text == f"+{game.round_bonus.value} per {base.subject}"
+        else:
+            assert game.round_bonus in ROUND_BONUSES  # pairs are never boosted
+    total = sum(extras.values())
+    assert set(extras) == {0, 1, 2}
+    assert extras[1] / total == pytest.approx(0.25, abs=0.05)
+    assert extras[2] / total == pytest.approx(0.10, abs=0.04)
 
 
 def test_there_is_a_short_round_bonus_for_every_letter_and_two_pairs():
@@ -328,9 +345,10 @@ def test_every_turn_gets_a_new_round_bonus():
     for _ in range(60):
         bonuses.append(game.round_bonus)
         game.skip()
-    assert all(bonus in ROUND_BONUSES for bonus in bonuses)
-    assert all(a is not b for a, b in pairwise(bonuses))
-    assert len(set(bonuses)) > 20
+    subjects = {bonus.subject for bonus in ROUND_BONUSES}
+    assert all(bonus.subject in subjects for bonus in bonuses)
+    assert all(a.subject != b.subject for a, b in pairwise(bonuses))
+    assert len({bonus.subject for bonus in bonuses}) > 20
 
 
 @pytest.mark.parametrize("challenge", ["include R", "no R", "end with R"])
