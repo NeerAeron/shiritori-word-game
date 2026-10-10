@@ -27,8 +27,11 @@ class Difficulty:
     a quick answer is followed by a long blank, like a newer player. ``typing``
     is the seconds it takes per letter. In challenge mode, ``bonus_chance`` is
     how often it goes for the game bonus, and ``round_bonus_chance`` how often
-    it goes for a word that earns plenty of round bonus points. ``tactics`` is
-    how strongly it prefers words that end in a letter few words start with.
+    it goes for a word that earns plenty of round bonus points, and
+    ``challenge_length_shift`` moves its word lengths (negative for shorter
+    words), since meeting each turn's requirement slows people down.
+    ``tactics`` is how strongly it prefers words that end in a letter few
+    words start with.
     """
 
     name: str
@@ -42,6 +45,7 @@ class Difficulty:
     typing: float
     bonus_chance: float
     round_bonus_chance: float = 0
+    challenge_length_shift: float = 0
     tactics: float = 0  # How hard it tries to leave the next player an awkward letter
 
 
@@ -168,6 +172,8 @@ def choose_word(game: Game, difficulty: Difficulty, rng: random.Random) -> str |
         return None
 
     shift = EASE_LENGTH * letter_ease(game.words, game.letter)
+    if isinstance(game, ChallengeGame):
+        shift += difficulty.challenge_length_shift
     low, high = difficulty.min_length + shift, difficulty.max_length + shift
     candidates = [word for word in playable if low <= len(word) <= high] or playable
     if isinstance(game, ChallengeGame) and rng.random() < difficulty.round_bonus_chance:
